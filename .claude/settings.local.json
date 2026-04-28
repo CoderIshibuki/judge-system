@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(netstat -ano)",
+      "Bash(npm start *)",
+      "Bash(kill 14004 *)",
+      "Bash(kill 12216 *)"
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  username     String       @unique
+  passwordHash String
+  role         String       @default("contestant")  
+  rating       Int          @default(1500)
+  submissions  Submission[]
+}
+
+model Problem {
+  id            Int          @id @default(autoincrement())
+  title         String
+  description   String
+  timeLimitMs   Int          @default(1000)
+  memoryLimitKb Int          @default(256000)
+  testCases     TestCase[]
+  submissions   Submission[]
+  contests      Contest[]    @relation("ContestProblems") 
+}
+
+model TestCase {
+  id             Int     @id @default(autoincrement())
+  problemId      Int
+  inputData      String
+  expectedOutput String
+  isHidden       Boolean @default(true)
+  problem        Problem @relation(fields: [problemId], references: [id])
+}
+
+model Submission {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  problemId       Int
+  sourceCode      String
+  status          String   @default("Pending") // AC, WA, TLE, MLE, CE...
+  executionTimeMs Int?
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id])
+  problem         Problem  @relation(fields: [problemId], references: [id])
+}
+
+model Contest {
+  id        Int       @id @default(autoincrement())
+  title     String
+  startTime DateTime
+  endTime   DateTime
+  problems  Problem[] @relation("ContestProblems")
+}

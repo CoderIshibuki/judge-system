@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Online Judge</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h1>Online Judge</h1>
+  <section id="problems"></section>
+  <section id="submission" style="display:none;">
+    <h2 id="problem-title"></h2>
+    <pre id="problem-desc"></pre>
+    <textarea id="code" rows="15" cols="80"></textarea><br/>
+    <label for="lang">Language:</label>
+    <select id="lang">
+      <option value="python">Python</option>
+      <option value="cpp">C++</option>
+      <option value="java">Java</option>
+    </select>
+    <button id="run">Run</button>
+    <pre id="output"></pre>
+  </section>
+  <script src="app.js"></script>
+</body>
+</html>
