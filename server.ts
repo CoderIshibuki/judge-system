@@ -373,6 +373,81 @@ app.put(
   },
 );
 
+// [API CHO ADMIN] THÊM HÀNG LOẠT USER TỪ FILE
+app.post(
+  "/api/admin/users/bulk",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const { usernames } = req.body;
+      if (!usernames || !Array.isArray(usernames))
+        return res.status(400).json({ error: "Dữ liệu không hợp lệ" });
+
+      // Tạo sẵn mã băm cho mật khẩu "123456"
+      const defaultPasswordHash = await bcrypt.hash("123456", 10);
+
+      // Kiểm tra xem user nào đã tồn tại để bỏ qua (SQLite không hỗ trợ skipDuplicates)
+      const existingUsers = await prisma.user.findMany({
+        where: { username: { in: usernames } },
+      });
+      const existingNames = existingUsers.map((u: any) => u.username);
+
+      const newUsers = usernames
+        .filter((u: string) => !existingNames.includes(u))
+        .map((u: string) => ({
+          username: u,
+          passwordHash: defaultPasswordHash,
+          role: "CONTESTANT",
+          rating: 1500,
+        }));
+
+      if (newUsers.length > 0) {
+        await prisma.user.createMany({ data: newUsers });
+      }
+
+      res.json({
+        success: true,
+        added: newUsers.length,
+        skipped: existingNames.length,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Lỗi thêm user hàng loạt" });
+    }
+  },
+);
+
+// [API CHO USER] ĐỔI MẬT KHẨU CÁ NHÂN
+app.put(
+  "/api/users/password",
+  authenticateToken,
+  async (req: any, res: any) => {
+    try {
+      const { oldPassword, newPassword } = req.body;
+      // req.user.userId được giải mã từ JWT Token
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+      });
+      if (!user) return res.status(404).json({ error: "Không tìm thấy user" });
+
+      const valid = await bcrypt.compare(oldPassword, user.passwordHash);
+      if (!valid)
+        return res.status(400).json({ error: "Mật khẩu cũ không chính xác" });
+
+      const hash = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: hash },
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi đổi mật khẩu" });
+    }
+  },
+);
+
 // XÓA USER
 app.delete(
   "/api/admin/users/:id",

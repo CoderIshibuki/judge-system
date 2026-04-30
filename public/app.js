@@ -59,6 +59,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
+    openChangePwdModal: function () {
+      document.getElementById("user-old-pwd").value = "";
+      document.getElementById("user-new-pwd").value = "";
+      document.getElementById("modal-change-pwd").classList.remove("hidden");
+      document.getElementById("modal-change-pwd").classList.add("flex");
+    },
+
     logout: function () {
       localStorage.removeItem("token");
       localStorage.removeItem("username");
@@ -1294,6 +1301,88 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {
         showToast(e.message, "bg-red-500");
       }
+    });
+
+  // Sự kiện Nút Lưu Mật Khẩu Mới
+  document
+    .getElementById("btn-save-pwd")
+    ?.addEventListener("click", async () => {
+      const oldPassword = document.getElementById("user-old-pwd").value;
+      const newPassword = document.getElementById("user-new-pwd").value;
+      if (!oldPassword || !newPassword)
+        return showToast("Vui lòng nhập đủ mật khẩu!", "bg-red-500");
+
+      try {
+        const res = await fetch("/api/users/password", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + app.token,
+          },
+          body: JSON.stringify({ oldPassword, newPassword }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Đổi mật khẩu thành công!", "bg-green-500");
+          document.getElementById("modal-change-pwd").classList.add("hidden");
+        } else throw new Error(data.error);
+      } catch (e) {
+        showToast(e.message, "bg-red-500");
+      }
+    });
+
+  // Xử lý Upload CSV hàng loạt
+  document
+    .getElementById("admin-csv-file")
+    ?.addEventListener("change", function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async function (event) {
+        const text = event.target.result;
+        // Tách dòng, xóa khoảng trắng, lọc bỏ dòng trống
+        const usernames = text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+
+        if (usernames.length === 0)
+          return showToast("File CSV trống!", "bg-red-500");
+        if (
+          !confirm(
+            `Tìm thấy ${usernames.length} tài khoản trong file. Bạn muốn tạo tất cả với mật khẩu mặc định "123456"?`,
+          )
+        ) {
+          e.target.value = ""; // Reset input
+          return;
+        }
+
+        try {
+          showToast("Đang tạo tài khoản...", "bg-blue-500");
+          const res = await fetch("/api/admin/users/bulk", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + app.token,
+            },
+            body: JSON.stringify({ usernames }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(
+              `Tạo thành công ${data.added} user. Bỏ qua ${data.skipped} user bị trùng.`,
+              "bg-green-500",
+            );
+            app.fetchAdminUsers();
+          } else throw new Error(data.error);
+        } catch (err) {
+          showToast(err.message, "bg-red-500");
+        }
+
+        e.target.value = ""; // Reset input
+      };
+      reader.readAsText(file);
     });
 
   // === 7. KHỞI TẠO DỮ LIỆU BAN ĐẦU ===
