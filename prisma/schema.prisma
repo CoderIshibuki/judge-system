@@ -38,14 +38,17 @@ model TestCase {
 
 model Submission {
   id              Int      @id @default(autoincrement())
-  userId          Int
-  problemId       Int
-  sourceCode      String
+  userId          Int?
+  problemId       Int?
+  code            String
+  language        String   @default("cpp")
   status          String   @default("Pending") // AC, WA, TLE, MLE, CE...
-  executionTimeMs Int?
+  time            Float?
+  memory          Int?
+  compileOutput   String?
   createdAt       DateTime @default(now())
-  user            User     @relation(fields: [userId], references: [id])
-  problem         Problem  @relation(fields: [problemId], references: [id])
+  user            User?    @relation(fields: [userId], references: [id])
+  problem         Problem? @relation(fields: [problemId], references: [id])
 }
 
 model Contest {

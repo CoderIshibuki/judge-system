@@ -1,21 +1,19 @@
-# Dockerfile for the judge sandbox
-# Stage 1: build the judge executable (g++)
-FROM gcc:13-bookworm AS builder
-WORKDIR /app
-COPY judge.cpp .
-# Build a static binary for faster startup and fewer runtime dependencies
-RUN g++ -O2 -static -s judge.cpp -o judge.exe
+# Minimal Dockerfile for compiling and running C++ submissions
+# Uses Alpine for a small image and installs the compilation toolchain
 
-# Stage 2: runtime image with required runtimes
-FROM debian:bookworm-slim
-# Install runtimes needed for multi-language support
-RUN apt-get update && apt-get install -y \
-    python3 \
-    openjdk-17-jdk \
-    && rm -rf /var/lib/apt/lists/*
-# Copy the built judge binary
-COPY --from=builder /app/judge.exe /usr/local/bin/judge.exe
-# Ensure the binary is executable
-RUN chmod +x /usr/local/bin/judge.exe
-# Default entrypoint (can be overridden by docker run args)
-ENTRYPOINT ["/usr/local/bin/judge.exe"]
+FROM ubuntu:22.04
+
+# Install build tools (g++) and bash, python3
+RUN apt-get update && apt-get install -y g++ bash time python3
+
+# Create a non-root user for running untrusted binaries
+RUN groupadd -r judge && useradd -r -g judge judge
+
+# Working dir where code will be mounted or copied
+WORKDIR /app
+
+# Run as non-root user by default
+USER judge
+
+# Default to an interactive shell; callers can override CMD to run compiled binaries
+CMD ["/bin/bash"]

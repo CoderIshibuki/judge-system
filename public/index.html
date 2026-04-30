@@ -1,27 +1,56 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Online Judge</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <h1>Online Judge</h1>
-  <section id="problems"></section>
-  <section id="submission" style="display:none;">
-    <h2 id="problem-title"></h2>
-    <pre id="problem-desc"></pre>
-    <textarea id="code" rows="15" cols="80"></textarea><br/>
-    <label for="lang">Language:</label>
-    <select id="lang">
-      <option value="python">Python</option>
-      <option value="cpp">C++</option>
-      <option value="java">Java</option>
-    </select>
-    <button id="run">Run</button>
-    <pre id="output"></pre>
-  </section>
-  <script src="app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Online Judge</title>
+    <link href="/output.css" rel="stylesheet" />
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <div class="flex h-screen">
+      <!-- Sidebar -->
+      <div class="w-1/4 bg-white border-r p-4">
+        <h2 class="text-xl font-bold mb-4">Problems</h2>
+        <select id="problemId" class="w-full p-2 border rounded">
+          <option value="">Select a problem...</option>
+        </select>
+      </div>
+
+      <!-- Main Content -->
+      <div class="w-1/2 flex flex-col">
+        <div class="flex-grow p-4 bg-gray-800 text-white">
+          <h2 class="text-xl font-bold mb-4">Code Editor</h2>
+          <div id="editor" style="height: 400px; border: 1px solid #ccc;"></div>
+        </div>
+        <div class="p-4 bg-white border-t">
+          <button
+            id="submit-btn"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Submit
+          </button>
+        </div>
+      </div>
+
+      <!-- Results Panel -->
+      <div class="w-1/4 bg-white border-l p-4">
+        <h2 class="text-xl font-bold mb-4">Result</h2>
+        <div id="result-output">
+          <!-- Submission result will be shown here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div
+      id="toast"
+      class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg hidden"
+    >
+      <p id="toast-message"></p>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
 </html>

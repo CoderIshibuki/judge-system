@@ -6,8 +6,12 @@
 #include <algorithm>
 #include <filesystem>
 #include <cstdlib>
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -40,11 +44,11 @@ int main() {
     // 1. Compile submission.cpp
     const std::string compile_cmd = "g++ -std=c++17 -O2 -pipe -static -s submission.cpp -o solution";
     int compile_status = std::system(compile_cmd.c_str());
+#ifdef _WIN32
+    if (compile_status != 0) {
+#else
     if (WIFEXITED(compile_status) && WEXITSTATUS(compile_status) != 0) {
-        std::cout << "STATUS: CE" << std::endl;
-        return 0;
-    }
-    if (!WIFEXITED(compile_status)) {
+#endif
         std::cout << "STATUS: CE" << std::endl;
         return 0;
     }
@@ -93,11 +97,15 @@ int main() {
         std::string cmd = "timeout " + std::to_string(time_limit_sec) + "s ./solution < " + in_path.string() + " > __tmp_out.txt";
         int run_status = std::system(cmd.c_str());
         // Check timeout (124 is timeout's exit code)
+#ifdef _WIN32
+        if (run_status == 124) {
+#else
         if (WIFEXITED(run_status) && WEXITSTATUS(run_status) == 124) {
+#endif
             std::cout << "STATUS: TLE" << std::endl;
             return 0;
         }
-        if (!WIFEXITED(run_status) || WEXITSTATUS(run_status) != 0) {
+        if (run_status != 0) {
             // Runtime error – treat as WA for simplicity
             std::cout << "STATUS: WA" << std::endl;
             return 0;
