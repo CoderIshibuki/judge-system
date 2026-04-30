@@ -7,76 +7,121 @@ document.addEventListener("DOMContentLoaded", () => {
   const leaderboardList = document.getElementById("leaderboard-list");
   const connStatus = document.getElementById("conn-status");
 
+  // UI Toggles (Admin / Contestant)
+  const btnContestant = document.getElementById("btn-contestant");
+  const btnAdmin = document.getElementById("btn-admin");
+  const adminDashboard = document.getElementById("admin-dashboard");
+  const contestantWorkspace = document.getElementById("contestant-workspace");
+
+  // Admin fields
+  const adminTitle = document.getElementById("admin-prob-title");
+  const adminDesc = document.getElementById("admin-prob-desc");
+  const adminTime = document.getElementById("admin-prob-time");
+  const adminMemory = document.getElementById("admin-prob-memory");
+  const adminTestcases = document.getElementById("admin-prob-testcases");
+  const adminSubmitBtn = document.getElementById("admin-submit-btn");
+
   let selectedProblemId = null;
   let activeSubmissionId = null;
+  const token = localStorage.getItem("token") || "";
 
-  // Initialize Socket.io
+  // --- 1. Admin / Contestant Toggle ---
+  btnContestant.addEventListener("click", () => {
+    adminDashboard.classList.add("hidden");
+    contestantWorkspace.classList.remove("hidden");
+    contestantWorkspace.classList.add("flex");
+    btnContestant.className =
+      "px-3 py-1 rounded bg-blue-600 text-white font-medium";
+    btnAdmin.className = "px-3 py-1 rounded text-gray-300 hover:text-white";
+  });
+
+  btnAdmin.addEventListener("click", () => {
+    contestantWorkspace.classList.add("hidden");
+    contestantWorkspace.classList.remove("flex");
+    adminDashboard.classList.remove("hidden");
+    btnAdmin.className = "px-3 py-1 rounded bg-blue-600 text-white font-medium";
+    btnContestant.className =
+      "px-3 py-1 rounded text-gray-300 hover:text-white";
+  });
+
+  // --- 2. Socket.io ---
   const socket = io();
-
   socket.on("connect", () => {
     connStatus.textContent = "Connected";
     connStatus.className = "text-green-500 font-medium";
   });
-
   socket.on("disconnect", () => {
     connStatus.textContent = "Disconnected";
     connStatus.className = "text-red-500 font-medium";
   });
-
   socket.on("submission_update", (submission) => {
     if (activeSubmissionId === submission.id) {
       updateResultPanel(submission);
     }
-    
-    // If it's an Accepted state, refetch the leaderboard
     if (submission.status === "Accepted (AC)") {
       fetchLeaderboard();
     }
   });
 
-  // Initialize Monaco Editor
-  require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs' }});
-  require(['vs/editor/editor.main'], function() {
-    window.editor = monaco.editor.create(document.getElementById('editor'), {
-      value: '#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b;\n    cin >> a >> b;\n    cout << (a + b) << endl;\n    return 0;\n}',
-      language: 'cpp',
-      theme: 'vs-dark',
+  // --- 3. Monaco Editor ---
+  require.config({
+    paths: {
+      vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs",
+    },
+  });
+  require(["vs/editor/editor.main"], function () {
+    window.editor = monaco.editor.create(document.getElementById("editor"), {
+      value:
+        "#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b;\n    cin >> a >> b;\n    cout << (a + b) << endl;\n    return 0;\n}",
+      language: "cpp",
+      theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
       fontSize: 14,
       fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
     });
 
-    languageSelect.addEventListener('change', (e) => {
+    languageSelect.addEventListener("change", (e) => {
       const lang = e.target.value;
       const model = window.editor.getModel();
       monaco.editor.setModelLanguage(model, lang);
-      if (lang === 'python') {
-        window.editor.setValue('a, b = map(int, input().split())\nprint(a + b)\n');
+      if (lang === "python") {
+        window.editor.setValue(
+          "a, b = map(int, input().split())\nprint(a + b)\n",
+        );
       } else {
-        window.editor.setValue('#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b;\n    cin >> a >> b;\n    cout << (a + b) << endl;\n    return 0;\n}');
+        window.editor.setValue(
+          "#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b;\n    cin >> a >> b;\n    cout << (a + b) << endl;\n    return 0;\n}",
+        );
       }
     });
 
-    // Add keyboard shortcut for submitting
-    window.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      submitBtn.click();
-    });
+    window.editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+      () => {
+        submitBtn.click();
+      },
+    );
   });
 
+  // --- 4. Fetch Functions ---
   function fetchProblems() {
     fetch("/problems")
       .then((res) => res.json())
       .then((problems) => {
-        problemSelect.innerHTML = '<option value="">Select a problem...</option>';
+        problemSelect.innerHTML =
+          '<option value="">Select a problem...</option>';
         problems.forEach((problem) => {
           const option = document.createElement("option");
           option.value = problem.id;
           option.textContent = `${problem.id}. ${problem.title}`;
+          option.dataset.desc = problem.description;
+          option.dataset.time = problem.timeLimitMs;
+          option.dataset.mem = problem.memoryLimitKb;
           problemSelect.appendChild(option);
         });
       })
-      .catch(err => console.error("Error fetching problems:", err));
+      .catch((err) => console.error("Error fetching problems:", err));
   }
 
   function fetchLeaderboard() {
@@ -85,13 +130,14 @@ document.addEventListener("DOMContentLoaded", () => {
       .then((leaderboard) => {
         leaderboardList.innerHTML = "";
         if (leaderboard.length === 0) {
-          leaderboardList.innerHTML = '<li class="text-gray-500 text-sm italic">No ranking available yet.</li>';
+          leaderboardList.innerHTML =
+            '<li class="text-gray-500 text-sm italic">No ranking available yet.</li>';
           return;
         }
         leaderboard.forEach((user, index) => {
           const li = document.createElement("li");
-          li.className = "flex justify-between items-center p-2 rounded hover:bg-gray-700 transition-colors";
-          
+          li.className =
+            "flex justify-between items-center p-2 rounded hover:bg-gray-700 transition-colors";
           let rankColor = "text-gray-400";
           if (index === 0) rankColor = "text-yellow-400 font-bold";
           else if (index === 1) rankColor = "text-gray-300 font-semibold";
@@ -109,11 +155,22 @@ document.addEventListener("DOMContentLoaded", () => {
           leaderboardList.appendChild(li);
         });
       })
-      .catch(err => console.error("Error fetching leaderboard:", err));
+      .catch((err) => console.error("Error fetching leaderboard:", err));
   }
 
+  // --- 5. Event Listeners ---
   problemSelect.addEventListener("change", (e) => {
     selectedProblemId = e.target.value ? parseInt(e.target.value) : null;
+    const detailsDiv = document.getElementById("problem-details");
+    if (selectedProblemId) {
+      const selectedOpt = e.target.options[e.target.selectedIndex];
+      detailsDiv.innerHTML = `
+            <div class="font-medium text-gray-200 mb-1">${selectedOpt.dataset.desc || "No description."}</div>
+            <div class="text-xs text-gray-500">Time: ${selectedOpt.dataset.time}ms | Mem: ${selectedOpt.dataset.mem}KB</div>
+        `;
+    } else {
+      detailsDiv.innerHTML = "Select a problem to begin.";
+    }
   });
 
   submitBtn.addEventListener("click", () => {
@@ -123,9 +180,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const sourceCode = window.editor.getValue();
     const language = languageSelect.value;
-    
+
     if (!selectedProblemId) {
-      showToast("Please select a problem first.", "bg-yellow-500 text-yellow-900");
+      showToast(
+        "Please select a problem first.",
+        "bg-yellow-500 text-yellow-900",
+      );
       return;
     }
     if (!sourceCode.trim()) {
@@ -139,9 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     fetch("/submit", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sourceCode,
         problemId: selectedProblemId,
@@ -166,10 +224,13 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           `;
         } else {
-          showToast(data.error || "Submission failed.", "bg-red-500 text-white");
+          showToast(
+            data.error || "Submission failed.",
+            "bg-red-500 text-white",
+          );
         }
       })
-      .catch(err => {
+      .catch((err) => {
         console.error(err);
         submitBtn.disabled = false;
         submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
@@ -178,16 +239,84 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   });
 
+  // --- 6. Admin API Logic ---
+  adminSubmitBtn.addEventListener("click", async () => {
+    const title = adminTitle.value;
+    const desc = adminDesc.value;
+    const time = parseInt(adminTime.value);
+    const memory = parseInt(adminMemory.value);
+    let testcases = [];
+
+    try {
+      testcases = JSON.parse(adminTestcases.value);
+    } catch (e) {
+      showToast("Invalid JSON in Testcases field!", "bg-red-500");
+      return;
+    }
+
+    adminSubmitBtn.disabled = true;
+    adminSubmitBtn.textContent = "Creating...";
+
+    try {
+      const res = await fetch("/api/problems", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({
+          title,
+          description: desc,
+          timeLimitMs: time,
+          memoryLimitKb: memory,
+        }),
+      });
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error);
+
+      const tcRes = await fetch(`/api/problems/${data.problem.id}/testcases`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ testcases }),
+      });
+      const tcData = await tcRes.json();
+
+      if (!tcData.success) throw new Error(tcData.error);
+
+      showToast("Problem created successfully!", "bg-green-500");
+      adminTitle.value = "";
+      adminDesc.value = "";
+      fetchProblems();
+    } catch (err) {
+      showToast(
+        err.message || "Failed to create problem. Are you Admin?",
+        "bg-red-500",
+      );
+    } finally {
+      adminSubmitBtn.disabled = false;
+      adminSubmitBtn.textContent = "Create Problem & Upload Testcases";
+    }
+  });
+
+  // --- 7. UI Helpers ---
   function updateResultPanel(submission) {
     const status = submission.status ? submission.status.trim() : "Pending";
-    
     let statusClass = "text-yellow-400";
     let bgClass = "bg-yellow-900/20 border-yellow-700";
-    
+
     if (status.includes("Accepted")) {
       statusClass = "text-green-400";
       bgClass = "bg-green-900/20 border-green-700";
-    } else if (status.includes("Wrong Answer") || status.includes("Runtime Error") || status.includes("Time Limit") || status.includes("Compile Error")) {
+    } else if (
+      status.includes("Wrong Answer") ||
+      status.includes("Runtime Error") ||
+      status.includes("Time Limit") ||
+      status.includes("Compile Error")
+    ) {
       statusClass = "text-red-400";
       bgClass = "bg-red-900/20 border-red-700";
     } else if (status.includes("Compiling") || status.includes("Running")) {
@@ -195,8 +324,9 @@ document.addEventListener("DOMContentLoaded", () => {
       bgClass = "bg-blue-900/20 border-blue-700";
     }
 
-    const timeStr = submission.time !== null ? submission.time + ' ms' : '--';
-    const memoryStr = submission.memory !== null ? submission.memory + ' KB' : '--';
+    const timeStr = submission.time !== null ? submission.time + " ms" : "--";
+    const memoryStr =
+      submission.memory !== null ? submission.memory + " KB" : "--";
 
     let html = `
     <div class="border ${bgClass} rounded-lg p-4 transition-all duration-300">
@@ -204,7 +334,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="font-medium text-gray-400">Status</span>
         <span class="font-bold ${statusClass}">${status}</span>
       </div>
-      
       <div class="grid grid-cols-2 gap-4 text-center">
         <div class="bg-gray-800/50 rounded p-2 border border-gray-700">
            <div class="text-xs text-gray-500 uppercase">Time</div>
@@ -215,16 +344,16 @@ document.addEventListener("DOMContentLoaded", () => {
            <div class="font-mono text-gray-300 mt-1">${memoryStr}</div>
         </div>
       </div>
-  `;
-
-  if (submission.compileOutput && status.includes("Compile Error")) {
-    html += `
-      <div class="mt-4">
-        <div class="text-xs text-red-400 mb-1">Compiler Output:</div>
-        <pre class="bg-gray-950 p-2 text-xs font-mono text-red-300 rounded overflow-x-auto border border-red-900/50 whitespace-pre-wrap">${escapeHtml(submission.compileOutput)}</pre>
-      </div>
     `;
-  }
+
+    if (submission.compileOutput && status.includes("Compile Error")) {
+      html += `
+        <div class="mt-4">
+          <div class="text-xs text-red-400 mb-1">Compiler Output:</div>
+          <pre class="bg-gray-950 p-2 text-xs font-mono text-red-300 rounded overflow-x-auto border border-red-900/50 whitespace-pre-wrap">${escapeHtml(submission.compileOutput)}</pre>
+        </div>
+      `;
+    }
 
     html += `</div>`;
     resultOutput.innerHTML = html;
@@ -233,17 +362,17 @@ document.addEventListener("DOMContentLoaded", () => {
   function escapeHtml(unsafe) {
     if (!unsafe) return "";
     return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   function showToast(message, colorClass = "bg-blue-500 text-white") {
     toast.textContent = message;
-    toast.className = \`fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 z-50 text-sm font-medium \${colorClass}\`;
-    
+    toast.className = `fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 z-50 text-sm font-medium ${colorClass}`;
+
     requestAnimationFrame(() => {
       toast.classList.remove("opacity-0", "translate-y-10");
     });
@@ -253,6 +382,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 3000);
   }
 
+  // Khởi chạy khi load trang
   fetchProblems();
   fetchLeaderboard();
 });
