@@ -22,6 +22,7 @@ model Problem {
   description   String
   timeLimitMs   Int          @default(1000)
   memoryLimitKb Int          @default(256000)
+  points        Int          @default(100)
   testCases     TestCase[]
   submissions   Submission[]
   contests      Contest[]    @relation("ContestProblems") 
@@ -47,14 +48,19 @@ model Submission {
   memory          Int?
   compileOutput   String?
   createdAt       DateTime @default(now())
+  details         String?
   user            User?    @relation(fields: [userId], references: [id])
   problem         Problem? @relation(fields: [problemId], references: [id])
 }
 
 model Contest {
-  id        Int       @id @default(autoincrement())
-  title     String
-  startTime DateTime
-  endTime   DateTime
-  problems  Problem[] @relation("ContestProblems")
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  password    String?   
+  
+  problems    Problem[] @relation("ContestProblems") 
+  createdAt   DateTime  @default(now())
 }

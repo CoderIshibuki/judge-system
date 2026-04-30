@@ -1,6 +1,0 @@
-body {font-family: Arial, sans-serif; margin: 20px;}
-#problems {margin-bottom: 20px;}
-.problem {border: 1px solid #ccc; padding: 10px; margin: 5px 0; cursor: pointer;}
-#submission {margin-top: 20px;}
-#code {width: 100%; font-family: monospace;}
-#output {background:#f8f8f8; padding:10px; white-space: pre-wrap;}

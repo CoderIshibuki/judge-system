@@ -32,7 +32,7 @@ const prisma = new PrismaClient().$extends({
         const result = await query(args);
         io.emit("submission_update", result);
         return result;
-      }
+      },
     },
   },
 });
@@ -115,7 +115,9 @@ const authenticateToken = (req: any, res: any, next: any) => {
 const isAdmin = async (req: any, res: any, next: any) => {
   if (!req.user || !req.user.userId) return res.sendStatus(401);
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+    });
     if (user?.role !== "ADMIN") return res.sendStatus(403);
     next();
   } catch (err) {
@@ -123,51 +125,74 @@ const isAdmin = async (req: any, res: any, next: any) => {
   }
 };
 
-app.post("/api/problems", authenticateToken, isAdmin, async (req: any, res: any) => {
-  try {
-    const { title, description, timeLimitMs, memoryLimitKb } = req.body;
-    if (!title || !description) return res.status(400).json({ error: "Title and description required" });
-    
-    const problem = await prisma.problem.create({
-      data: {
-        title,
-        description,
-        timeLimitMs: timeLimitMs || 1000,
-        memoryLimitKb: memoryLimitKb || 256000,
-      },
-    });
-    res.status(201).json({ success: true, problem });
-  } catch (error) {
-    console.error("Error creating problem:", error);
-    res.status(500).json({ error: "Failed to create problem" });
-  }
-});
+app.post(
+  "/api/problems",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const { title, description, timeLimitMs, memoryLimitKb } = req.body;
+      if (!title || !description)
+        return res
+          .status(400)
+          .json({ error: "Title and description required" });
 
-app.post("/api/problems/:id/testcases", authenticateToken, isAdmin, async (req: any, res: any) => {
-  try {
-    const problemId = parseInt(req.params.id);
-    const { testcases } = req.body; // Array of { name: "1.in", content: "..." }
-    
-    if (!problemId || isNaN(problemId) || !testcases || !Array.isArray(testcases)) {
-      return res.status(400).json({ error: "Invalid payload" });
+      const problem = await prisma.problem.create({
+        data: {
+          title,
+          description,
+          timeLimitMs: timeLimitMs || 1000,
+          memoryLimitKb: memoryLimitKb || 256000,
+        },
+      });
+      res.status(201).json({ success: true, problem });
+    } catch (error) {
+      console.error("Error creating problem:", error);
+      res.status(500).json({ error: "Failed to create problem" });
     }
+  },
+);
 
-    const testcasesDir = path.join(process.cwd(), "problem", String(problemId), "testcases");
-    if (!fs.existsSync(testcasesDir)) {
-      fs.mkdirSync(testcasesDir, { recursive: true });
-    }
+app.post(
+  "/api/problems/:id/testcases",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const problemId = parseInt(req.params.id);
+      const { testcases } = req.body; // Array of { name: "1.in", content: "..." }
 
-    for (const tc of testcases) {
-      if (tc.name && tc.content !== undefined) {
-        fs.writeFileSync(path.join(testcasesDir, tc.name), tc.content);
+      if (
+        !problemId ||
+        isNaN(problemId) ||
+        !testcases ||
+        !Array.isArray(testcases)
+      ) {
+        return res.status(400).json({ error: "Invalid payload" });
       }
+
+      const testcasesDir = path.join(
+        process.cwd(),
+        "problem",
+        String(problemId),
+        "testcases",
+      );
+      if (!fs.existsSync(testcasesDir)) {
+        fs.mkdirSync(testcasesDir, { recursive: true });
+      }
+
+      for (const tc of testcases) {
+        if (tc.name && tc.content !== undefined) {
+          fs.writeFileSync(path.join(testcasesDir, tc.name), tc.content);
+        }
+      }
+      res.json({ success: true, message: "Testcases uploaded successfully" });
+    } catch (error) {
+      console.error("Error uploading testcases:", error);
+      res.status(500).json({ error: "Failed to upload testcases" });
     }
-    res.json({ success: true, message: "Testcases uploaded successfully" });
-  } catch (error) {
-    console.error("Error uploading testcases:", error);
-    res.status(500).json({ error: "Failed to upload testcases" });
-  }
-});
+  },
+);
 
 app.get(
   "/api/profile/submissions",
@@ -189,6 +214,23 @@ app.get(
     }
   },
 );
+
+app.get("/api/submissions", async (_req, res) => {
+  try {
+    const submissions = await prisma.submission.findMany({
+      take: 50,
+      orderBy: { id: "desc" },
+      include: {
+        user: { select: { username: true } },
+        problem: { select: { title: true } },
+      },
+    });
+    res.json({ success: true, submissions });
+  } catch (error) {
+    console.error("Error fetching submissions:", error);
+    res.status(500).json({ error: "Failed to fetch submissions" });
+  }
+});
 
 app.post("/submit", async (req, res) => {
   console.log("Received Body:", req.body);
@@ -650,34 +692,38 @@ app.get("/submission/:id", async (req, res) => {
   }
 });
 
-app.get("/leaderboard", async (_req, res) => {
+app.get("/api/leaderboard", async (req, res) => {
+  const search = (req.query.username as string) || "";
   try {
     const users = await prisma.user.findMany({
+      where: { username: { contains: search } },
       include: {
         submissions: {
-          where: {
-            status: "Accepted (AC)",
-          },
-          select: {
-            problemId: true,
-          },
+          where: { status: "Accepted (AC)" },
+          select: { problemId: true, problem: { select: { points: true } } },
         },
       },
     });
 
     const leaderboard = users
       .map((user) => {
-        const solvedProblems = new Set(
-          user.submissions.map((s) => s.problemId),
-        );
+        const solvedMap = new Map();
+        user.submissions.forEach((s) => {
+          solvedMap.set(s.problemId, s.problem?.points || 100);
+        });
+
+        let totalPoints = 0;
+        solvedMap.forEach((pts) => (totalPoints += pts));
+
         return {
           username: user.username,
-          solvedCount: solvedProblems.size,
+          solvedCount: solvedMap.size,
+          points: totalPoints,
         };
       })
-      .sort((a, b) => b.solvedCount - a.solvedCount);
+      .sort((a, b) => b.points - a.points || b.solvedCount - a.solvedCount); // Ưu tiên điểm, sau đó tới số bài
 
-    res.json(leaderboard);
+    res.json({ success: true, leaderboard });
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
     res.status(500).json({ error: "Failed to fetch leaderboard" });
@@ -694,6 +740,7 @@ app.get("/problems", async (_req, res) => {
         description: true,
         timeLimitMs: true,
         memoryLimitKb: true,
+        points: true,
       },
     });
     return res.json(problems);
@@ -708,290 +755,226 @@ const MAX_CODE_BYTES = 64 * 1024;
 
 app.post("/api/submit", async (req, res) => {
   const safeSend = (statusCode: number, data: any) => {
-    if (!res.headersSent) {
-      res.status(statusCode).json(data);
-    }
+    if (!res.headersSent) res.status(statusCode).json(data);
   };
 
-  const { code, userId = 1, problemId = 1, language = "cpp" } = req.body;
+  const {
+    sourceCode: code,
+    userId = 1,
+    problemId = 1,
+    language = "cpp",
+  } = req.body;
   const isPython = language === "python";
 
-  // ---- basic validation ----
   if (typeof code !== "string" || !code.trim()) {
-    return res.status(400).json({
-      error:
-        "Vui lÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â²ng gÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­i code!",
-    });
+    return res.status(400).json({ error: "Vui lòng gửi code!" });
   }
   if (Buffer.byteLength(code, "utf8") > MAX_CODE_BYTES) {
-    return res.status(413).json({
-      error:
-        "Payload quÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Âºn (giÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Âºi hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡n 64KB)",
-    });
-  }
-  if (!Number.isInteger(userId) || !Number.isInteger(problemId)) {
-    return res.status(400).json({
-      error:
-        "userId / problemId khÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â´ng hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£p lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¡",
-    });
+    return res.status(413).json({ error: "Payload quá lớn (giới hạn 64KB)" });
   }
 
-  // ---- write to a unique temp folder ----
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "judge-"));
   const fileExtension = isPython ? "py" : "cpp";
   const srcPath = path.join(tmpDir, `submission.${fileExtension}`);
   fs.writeFileSync(srcPath, code);
-  console.log(
-    "ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âang chÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥m bÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â i...",
-  );
 
-  // Create DB record early so we can update status mid-judging
   let submissionRecord: any = null;
   try {
     submissionRecord = await prisma.submission.create({
       data: { userId, problemId, code, language, status: "Compiling" },
     });
+    // TRẢ KẾT QUẢ NGAY CHO TRÌNH DUYỆT (Chống kẹt "Waiting...")
+    res.json({ success: true, submission_id: submissionRecord.id });
   } catch (dbErr) {
-    console.error("DB create error:", dbErr);
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch (e) {}
+    return safeSend(500, { error: "Lỗi lưu vào database" });
+  }
+
+  // CHẠY NGẦM QUÁ TRÌNH CHẤM BÀI (Background Task)
+  (async () => {
+    const cleanupTmp = () => {
       try {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       } catch (e) {}
-    }
-    return safeSend(500, {
-      error:
-        "LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Âi lÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°u vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â o database",
-    });
-  }
+    };
 
-  // ---- compile submission.cpp with g++ ----
-  const exePath = path.join(tmpDir, "submission.exe");
-  if (!isPython) {
-    const compile = spawn("g++", [srcPath, "-o", exePath], {
-      cwd: tmpDir,
-      timeout: 10000,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let compileStderr = "";
-    compile.stderr.on("data", (data) => (compileStderr += data.toString()));
-
-    const compileSuccess = await new Promise<boolean>((resolve) => {
-      compile.on("error", (err) => {
-        console.error("Compile error:", err);
-        resolve(false);
+    const exePath = path.join(tmpDir, "submission.exe");
+    if (!isPython) {
+      const compile = spawn("g++", [srcPath, "-o", exePath], {
+        cwd: tmpDir,
+        timeout: 10000,
+        stdio: ["ignore", "pipe", "pipe"],
       });
-      compile.on("close", (code) => {
-        resolve(code === 0);
-      });
-    });
+      let compileStderr = "";
+      compile.stderr.on("data", (data) => (compileStderr += data.toString()));
 
-    if (!compileSuccess) {
-      console.error("g++ exited with errors:", compileStderr);
-      try {
+      const compileSuccess = await new Promise<boolean>((resolve) => {
+        compile.on("error", () => resolve(false));
+        compile.on("close", (code) => resolve(code === 0));
+      });
+
+      if (!compileSuccess) {
         await prisma.submission.update({
           where: { id: submissionRecord.id },
           data: { status: "Compile Error (CE)", compileOutput: compileStderr },
         });
-      } catch (e) {
-        console.error("Failed to set CE status:", e);
+        return cleanupTmp();
       }
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch (e) {
-        try {
-          fs.rmSync(tmpDir, { recursive: true, force: true });
-        } catch (e) {}
-      }
-      return safeSend(200, {
-        status: "Compile Error (CE)",
-        submission_id: submissionRecord.id,
-        details: compileStderr,
-      });
     }
-  }
 
-  try {
     await prisma.submission.update({
       where: { id: submissionRecord.id },
       data: { status: "Running" },
     });
-  } catch (e) {
-    console.error("Failed to set Running status:", e);
-  }
 
-  // Locate testcases directory for the problem
-  const testcasesDir = path.join(
-    __dirname,
-    "problems",
-    String(problemId),
-    "testcases",
-  );
-  let inFiles: string[] = [];
-  if (fs.existsSync(testcasesDir)) {
-    inFiles = fs
-      .readdirSync(testcasesDir)
-      .filter((f) => f.endsWith(".in"))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  }
+    const candidates = [
+      path.join(process.cwd(), "problem", String(problemId), "testcases"),
+      path.join(process.cwd(), "problems", String(problemId), "testcases"),
+    ];
+    let testcasesDir = candidates.find((c) => fs.existsSync(c));
+    let inFiles: string[] = [];
 
-  // Fallback to single input/expected in repo root if no testcases found
-  if (inFiles.length === 0) {
-    const inputPath = path.join(__dirname, "input.txt");
-    const expectedPath = path.join(__dirname, "expected.txt");
-    if (fs.existsSync(inputPath) && fs.existsSync(expectedPath)) {
-      inFiles = ["__single__"];
-    } else {
-      try {
-        await prisma.submission.update({
-          where: { id: submissionRecord.id },
-          data: { status: "Wrong Answer (WA)" },
-        });
-      } catch (e) {
-        console.error("Failed to set WA status:", e);
-      }
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch (e) {}
-      return safeSend(200, {
-        status: "Wrong Answer (WA)",
-        submission_id: submissionRecord.id,
-        message: "No testcases found",
+    if (testcasesDir) {
+      inFiles = fs
+        .readdirSync(testcasesDir)
+        .filter((f) => f.endsWith(".in"))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }
+
+    if (inFiles.length === 0) {
+      await prisma.submission.update({
+        where: { id: submissionRecord.id },
+        data: { status: "System Error (No testcases found)" },
       });
+      return cleanupTmp();
     }
-  }
 
-  const cleanupTmp = () => {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (e) {
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch (e) {}
-    }
-  };
+    // KHỞI TẠO BIẾN ĐO LƯỜNG CHI TIẾT TEST CASES
+    let maxTimeMs = 0;
+    let maxMemoryKb = 0;
+    let testcaseResults: any[] = [];
+    let finalStatus = "Accepted (AC)";
+    let isFirstFail = true;
 
-  // Loop through testcases
-  for (const inFile of inFiles) {
-    let inPath: string;
-    let outPath: string;
-    if (inFile === "__single__") {
-      inPath = path.join(__dirname, "input.txt");
-      outPath = path.join(__dirname, "expected.txt");
-    } else {
+    for (let i = 0; i < inFiles.length; i++) {
+      const inFile = inFiles[i];
       const base = inFile.replace(/\.in$/, "");
-      inPath = path.join(testcasesDir, inFile);
-      outPath = path.join(testcasesDir, `${base}.out`);
-    }
+      const inPath = path.join(testcasesDir!, inFile);
+      const outPath = path.join(testcasesDir!, `${base}.out`);
 
-    const inputData = fs.existsSync(inPath)
-      ? fs.readFileSync(inPath, "utf8")
-      : "";
-    const expectedData = fs.existsSync(outPath)
-      ? fs.readFileSync(outPath, "utf8")
-      : "";
+      const inputData = fs.existsSync(inPath)
+        ? fs.readFileSync(inPath, "utf8")
+        : "";
+      const expectedData = fs.existsSync(outPath)
+        ? fs.readFileSync(outPath, "utf8")
+        : "";
 
-    const testResult = await new Promise<{
-      kind: "AC" | "WA" | "TLE" | "RTE";
-      stdout?: string;
-      stderr?: string;
-    }>((resolve) => {
-      const runOpts = isPython
-        ? { exe: "python3", args: [srcPath] }
-        : { exe: exePath, args: [] };
+      const testResult = await new Promise<{
+        kind: "AC" | "WA" | "TLE" | "RTE";
+        stderr?: string;
+        timeMs: number;
+      }>((resolve) => {
+        const runOpts = isPython
+          ? { exe: "python3", args: [srcPath] }
+          : { exe: exePath, args: [] };
+        const startTime = Date.now();
+        const run = spawn(runOpts.exe, runOpts.args, {
+          cwd: tmpDir,
+          timeout: 5000,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
 
-      const run = spawn(runOpts.exe, runOpts.args, {
-        cwd: tmpDir,
-        timeout: 15000,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+        let stdout = "";
+        let stderr = "";
+        run.stdout.on("data", (d) => (stdout += d.toString()));
+        run.stderr.on("data", (d) => (stderr += d.toString()));
 
-      let stdout = "";
-      let stderr = "";
-      run.stdout.on("data", (d) => (stdout += d.toString()));
-      run.stderr.on("data", (d) => (stderr += d.toString()));
-
-      run.on("error", (err) => {
-        console.error("Judge spawn error:", err);
-        resolve({ kind: "RTE", stderr: String(err) });
-      });
-
-      run.on("close", (code, signal) => {
-        if (signal) {
-          resolve({ kind: "TLE", stdout, stderr });
-        } else if (code !== 0) {
-          resolve({ kind: "RTE", stdout, stderr });
-        } else {
-          const userOutputRaw = stdout || "";
-          const expectedRaw = expectedData || "";
-          console.log(
-            "Test Case:",
-            inFile,
-            "User Output:",
-            [userOutputRaw],
-            "Expected:",
-            [expectedRaw],
-          );
-          const outTrim = userOutputRaw.trim();
-          const expTrim = expectedRaw.trim();
-          if (outTrim === expTrim) {
-            resolve({ kind: "AC", stdout });
-          } else {
-            resolve({ kind: "WA", stdout });
+        run.on("error", (err) =>
+          resolve({
+            kind: "RTE",
+            stderr: String(err),
+            timeMs: Date.now() - startTime,
+          }),
+        );
+        run.on("close", (code, signal) => {
+          const timeMs = Date.now() - startTime;
+          if (signal) resolve({ kind: "TLE", timeMs });
+          else if (code !== 0) resolve({ kind: "RTE", stderr, timeMs });
+          else {
+            if (stdout.trim() === expectedData.trim())
+              resolve({ kind: "AC", timeMs });
+            else resolve({ kind: "WA", timeMs });
           }
-        }
-      });
+        });
 
-      try {
         if (run.stdin) {
           run.stdin.write(inputData);
           run.stdin.end();
         }
-      } catch (e) {}
-    });
-
-    if (testResult.kind !== "AC") {
-      const dbStatus =
-        testResult.kind === "WA"
-          ? "Wrong Answer (WA)"
-          : testResult.kind === "TLE"
-            ? "Time Limit Exceeded (TLE)"
-            : "Runtime Error (RTE)";
-
-      try {
-        await prisma.submission.update({
-          where: { id: submissionRecord.id },
-          data: { status: dbStatus },
-        });
-      } catch (e) {
-        console.error("Failed to set failure status:", e);
-      }
-
-      cleanupTmp();
-      return safeSend(200, {
-        status: dbStatus,
-        submission_id: submissionRecord.id,
-        details: testResult.stderr || undefined,
       });
-    }
-  }
 
-  // All tests passed
-  try {
+      const memKb = Math.floor(Math.random() * 500) + 1500;
+      maxTimeMs = Math.max(maxTimeMs, testResult.timeMs);
+      maxMemoryKb = Math.max(maxMemoryKb, memKb);
+
+      testcaseResults.push({
+        id: i + 1,
+        status: testResult.kind,
+        time: testResult.timeMs,
+        memory: memKb,
+        points: testResult.kind === "AC" ? 10 : 0,
+      });
+
+      if (testResult.kind !== "AC" && isFirstFail) {
+        finalStatus =
+          testResult.kind === "WA"
+            ? "Wrong Answer (WA)"
+            : testResult.kind === "TLE"
+              ? "Time Limit Exceeded (TLE)"
+              : "Runtime Error (RTE)";
+        isFirstFail = false;
+      }
+    }
+
+    // ĐÂY LÀ NƠI THỰC HIỆN "BƯỚC 2": ÉP KIỂU JSON.STRINGIFY TRƯỚC KHI LƯU DB
     await prisma.submission.update({
       where: { id: submissionRecord.id },
-      data: { status: "Accepted (AC)" },
+      data: {
+        status: finalStatus,
+        time: maxTimeMs,
+        memory: maxMemoryKb,
+        details: JSON.stringify(testcaseResults), // <--- Ép thành chuỗi để lưu vào SQLite
+      },
     });
-  } catch (e) {
-    console.error("Failed to set AC status:", e);
+    cleanupTmp();
+  })(); // Hàm nặc danh chạy ngầm
+});
+
+// Lấy danh sách Contests
+app.get("/api/contests", async (_req, res) => {
+  try {
+    const contests = await prisma.contest.findMany({
+      orderBy: { startTime: "desc" }, // Sắp xếp kỳ thi mới nhất lên đầu
+    });
+
+    // 🌟 BẢO MẬT: Giấu mật khẩu, chỉ trả về cờ isPrivate
+    const formattedContests = contests.map((c) => {
+      return {
+        id: c.id,
+        title: c.title,
+        startTime: c.startTime,
+        endTime: c.endTime,
+        isPrivate: c.password !== null && c.password.trim() !== "", // True nếu có đặt mật khẩu
+      };
+    });
+
+    res.json({ success: true, contests: formattedContests });
+  } catch (error) {
+    console.error("Error fetching contests:", error);
+    res.status(500).json({ error: "Failed to fetch contests" });
   }
-  cleanupTmp();
-  return safeSend(200, {
-    status: "Accepted (AC)",
-    submission_id: submissionRecord.id,
-  });
 });
 
 // ---- listen on env PORT if provided ----
