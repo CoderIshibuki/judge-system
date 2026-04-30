@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import http from "http";
+import { Server } from "socket.io";
 import { spawn, exec } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -11,8 +13,29 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const app = express();
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+  },
+});
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient().$extends({
+  query: {
+    submission: {
+      async update({ args, query }) {
+        const result = await query(args);
+        io.emit("submission_update", result);
+        return result;
+      },
+      async create({ args, query }) {
+        const result = await query(args);
+        io.emit("submission_update", result);
+        return result;
+      }
+    },
+  },
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-key";
 
@@ -88,6 +111,63 @@ const authenticateToken = (req: any, res: any, next: any) => {
     next();
   });
 };
+
+const isAdmin = async (req: any, res: any, next: any) => {
+  if (!req.user || !req.user.userId) return res.sendStatus(401);
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    if (user?.role !== "ADMIN") return res.sendStatus(403);
+    next();
+  } catch (err) {
+    res.sendStatus(500);
+  }
+};
+
+app.post("/api/problems", authenticateToken, isAdmin, async (req: any, res: any) => {
+  try {
+    const { title, description, timeLimitMs, memoryLimitKb } = req.body;
+    if (!title || !description) return res.status(400).json({ error: "Title and description required" });
+    
+    const problem = await prisma.problem.create({
+      data: {
+        title,
+        description,
+        timeLimitMs: timeLimitMs || 1000,
+        memoryLimitKb: memoryLimitKb || 256000,
+      },
+    });
+    res.status(201).json({ success: true, problem });
+  } catch (error) {
+    console.error("Error creating problem:", error);
+    res.status(500).json({ error: "Failed to create problem" });
+  }
+});
+
+app.post("/api/problems/:id/testcases", authenticateToken, isAdmin, async (req: any, res: any) => {
+  try {
+    const problemId = parseInt(req.params.id);
+    const { testcases } = req.body; // Array of { name: "1.in", content: "..." }
+    
+    if (!problemId || isNaN(problemId) || !testcases || !Array.isArray(testcases)) {
+      return res.status(400).json({ error: "Invalid payload" });
+    }
+
+    const testcasesDir = path.join(process.cwd(), "problem", String(problemId), "testcases");
+    if (!fs.existsSync(testcasesDir)) {
+      fs.mkdirSync(testcasesDir, { recursive: true });
+    }
+
+    for (const tc of testcases) {
+      if (tc.name && tc.content !== undefined) {
+        fs.writeFileSync(path.join(testcasesDir, tc.name), tc.content);
+      }
+    }
+    res.json({ success: true, message: "Testcases uploaded successfully" });
+  } catch (error) {
+    console.error("Error uploading testcases:", error);
+    res.status(500).json({ error: "Failed to upload testcases" });
+  }
+});
 
 app.get(
   "/api/profile/submissions",
@@ -446,7 +526,7 @@ async function judgeSubmission(submissionId: number): Promise<void> {
 
     const runTimeout = Math.max(1000, timeLimitMs + 200);
     const winPath = inPath.replace(/\//g, "\\");
-    const cmdStr = `type "${winPath}" | docker run -i --rm -v "${projectRoot}:/app" -w /app --memory=128m --cpus=0.5 judge-box /usr/bin/time -v ${isPython ? `python3 ${fileName}` : `./${exeName}`}`;
+    const cmdStr = `type "${winPath}" | docker run -i --rm --network none --pids-limit 64 --read-only -v "${projectRoot}:/app" -w /app --memory=128m --cpus=0.5 judge-box /usr/bin/time -v ${isPython ? `python3 ${fileName}` : `./${exeName}`}`;
 
     const runRes = await new Promise<{
       code: number | null;
@@ -916,6 +996,6 @@ app.post("/api/submit", async (req, res) => {
 
 // ---- listen on env PORT if provided ----
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server is ready at port ${PORT}`);
 });

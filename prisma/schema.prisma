@@ -11,7 +11,7 @@ model User {
   id           Int          @id @default(autoincrement())
   username     String       @unique
   passwordHash String
-  role         String       @default("contestant")  
+  role         String       @default("CONTESTANT")  
   rating       Int          @default(1500)
   submissions  Submission[]
 }
