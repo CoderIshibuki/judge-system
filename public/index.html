@@ -602,22 +602,689 @@
         </div>
       </div>
 
-      <!-- 6. ADMIN DASHBOARD -->
+      <!-- 6. ADMIN DASHBOARD (Lột xác) -->
       <div
         id="admin-dashboard"
-        class="view-section hidden w-full h-full overflow-auto p-8 bg-gray-900"
+        class="view-section hidden w-full h-full flex flex-col bg-gray-900"
       >
-        <h2
-          class="text-2xl font-bold mb-6 text-yellow-500 border-b border-gray-700 pb-2"
+        <!-- Admin Navbar -->
+        <div
+          class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center shrink-0"
         >
-          Admin Dashboard
-        </h2>
-        <div class="text-gray-400 italic">
-          Khu vực tạo bài tập cũ của bạn (Tôi tạm ẩn form để code ngắn gọn, sẽ
-          ghép lại sau).
+          <h2 class="text-2xl font-bold text-yellow-500">
+            Admin Control Panel
+          </h2>
+          <div
+            class="flex space-x-2 bg-gray-900 p-1 rounded-lg border border-gray-700"
+          >
+            <button
+              id="tab-admin-probs"
+              class="px-4 py-1.5 rounded bg-gray-700 text-white font-medium shadow transition-colors text-sm"
+            >
+              Quản lý Bài Tập
+            </button>
+            <button
+              id="tab-admin-contests"
+              class="px-4 py-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-sm font-medium"
+            >
+              Quản lý Kỳ Thi
+            </button>
+            <button
+              id="tab-admin-users"
+              class="px-4 py-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-sm font-medium"
+            >
+              Quản lý User
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 1: Quản lý Bài Tập -->
+        <div
+          id="admin-view-probs"
+          class="flex-1 p-6 overflow-hidden flex flex-col"
+        >
+          <div class="flex justify-between items-center mb-4 shrink-0">
+            <h3 class="text-xl font-bold text-white">
+              Danh sách Bài Tập (Problems)
+            </h3>
+            <button
+              id="btn-show-add-prob"
+              class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-semibold transition-colors shadow-lg shadow-blue-500/20 text-sm flex items-center"
+            >
+              <svg
+                class="w-4 h-4 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4v16m8-8H4"
+                ></path>
+              </svg>
+              Tạo Bài Tập Mới
+            </button>
+          </div>
+          <div
+            class="flex-1 overflow-auto bg-gray-800 rounded-lg border border-gray-700 shadow-xl"
+          >
+            <table class="w-full text-left border-collapse">
+              <thead
+                class="bg-black border-b border-gray-700 text-gray-300 text-sm sticky top-0 z-10 shadow"
+              >
+                <tr>
+                  <th class="p-3 w-16 text-center">ID</th>
+                  <th class="p-3">Tên Bài Tập</th>
+                  <th class="p-3 w-32 text-center">Trạng thái</th>
+                  <th class="p-3 w-64 text-center">Hành động</th>
+                </tr>
+              </thead>
+              <tbody
+                id="admin-probs-list"
+                class="text-sm divide-y divide-gray-700 bg-gray-800"
+              >
+                <!-- JS sẽ render bảng quản lý bài tập vào đây -->
+                <tr class="hover:bg-gray-700/50 transition-colors">
+                  <td class="p-3 text-center text-gray-400">1</td>
+                  <td class="p-3 text-blue-400 font-semibold">A + B</td>
+                  <td class="p-3 text-center">
+                    <span
+                      class="bg-green-900/50 text-green-400 border border-green-700 px-2 py-0.5 rounded text-xs"
+                      >Public</span
+                    >
+                  </td>
+                  <td class="p-3 flex justify-center space-x-2">
+                    <button
+                      class="px-2 py-1 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600 hover:text-white rounded text-xs border border-yellow-700 transition"
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      class="px-2 py-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded text-xs border border-blue-700 transition"
+                    >
+                      Testcases
+                    </button>
+                    <button
+                      class="px-2 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded text-xs border border-gray-600 transition"
+                    >
+                      Hide
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Quản lý Kỳ Thi -->
+        <div
+          id="admin-view-contests"
+          class="hidden flex-1 p-6 overflow-hidden flex flex-col"
+        >
+          <div class="flex justify-between items-center mb-4 shrink-0">
+            <h3 class="text-xl font-bold text-white">
+              Danh sách Kỳ Thi (Contests)
+            </h3>
+            <button
+              id="btn-show-add-contest"
+              class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded font-semibold transition-colors shadow-lg shadow-purple-500/20 text-sm flex items-center"
+            >
+              <svg
+                class="w-4 h-4 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4v16m8-8H4"
+                ></path>
+              </svg>
+              Tạo Kỳ Thi Mới
+            </button>
+          </div>
+          <div
+            class="flex-1 overflow-auto bg-gray-800 rounded-lg border border-gray-700 shadow-xl"
+          >
+            <table class="w-full text-left border-collapse">
+              <thead
+                class="bg-black border-b border-gray-700 text-gray-300 text-sm sticky top-0 z-10 shadow"
+              >
+                <tr>
+                  <th class="p-3 w-16 text-center">ID</th>
+                  <th class="p-3">Tên Kỳ Thi</th>
+                  <th class="p-3 w-40 text-center">Thời gian</th>
+                  <th class="p-3 w-48 text-center">Hành động</th>
+                </tr>
+              </thead>
+              <tbody
+                id="admin-contests-list"
+                class="text-sm divide-y divide-gray-700 bg-gray-800"
+              >
+                <!-- JS sẽ render bảng quản lý kỳ thi vào đây -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Tab 3: Quản lý User -->
+        <div
+          id="admin-view-users"
+          class="hidden flex-1 p-6 overflow-hidden flex flex-col"
+        >
+          <div class="flex justify-between items-center mb-4 shrink-0">
+            <h3 class="text-xl font-bold text-white">
+              Danh sách Người Dùng (Users)
+            </h3>
+          </div>
+          <div
+            class="flex-1 overflow-auto bg-gray-800 rounded-lg border border-gray-700 shadow-xl"
+          >
+            <table class="w-full text-left border-collapse">
+              <thead
+                class="bg-black border-b border-gray-700 text-gray-300 text-sm sticky top-0 z-10 shadow"
+              >
+                <tr>
+                  <th class="p-3 w-16 text-center">ID</th>
+                  <th class="p-3">Username</th>
+                  <th class="p-3 w-32 text-center">Chức vụ</th>
+                  <th class="p-3 w-48 text-center">Hành động</th>
+                </tr>
+              </thead>
+              <tbody
+                id="admin-users-list"
+                class="text-sm divide-y divide-gray-700 bg-gray-800"
+              >
+                <!-- JS sẽ render bảng quản lý user vào đây -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </main>
+
+    <!-- ================= MODALS CHO ADMIN ================= -->
+    <!-- 1. Modal Tạo/Sửa Bài Tập -->
+    <div
+      id="modal-problem"
+      class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 transition-opacity"
+    >
+      <div
+        class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]"
+      >
+        <div
+          class="p-4 border-b border-gray-700 flex justify-between items-center shrink-0"
+        >
+          <h3 id="modal-prob-title" class="text-xl font-bold text-white">
+            Tạo Bài Tập Mới
+          </h3>
+          <button
+            onclick="
+              document.getElementById('modal-problem').classList.add('hidden')
+            "
+            class="text-gray-400 hover:text-red-400 transition-colors"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto space-y-4">
+          <input type="hidden" id="admin-prob-id" />
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-1"
+              >Tên bài tập</label
+            ><input
+              type="text"
+              id="admin-prob-name"
+              class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none transition-colors"
+            />
+          </div>
+          <div class="grid grid-cols-3 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"
+                >Thời gian (ms)</label
+              ><input
+                type="number"
+                id="admin-prob-time"
+                value="1000"
+                class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"
+                >Bộ nhớ (KB)</label
+              ><input
+                type="number"
+                id="admin-prob-mem"
+                value="256000"
+                class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"
+                >Điểm số</label
+              ><input
+                type="number"
+                id="admin-prob-points"
+                value="100"
+                class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none transition-colors"
+              />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-1"
+              >Đề bài chi tiết</label
+            ><textarea
+              id="admin-prob-desc"
+              rows="8"
+              class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none transition-colors font-mono text-sm"
+            ></textarea>
+          </div>
+        </div>
+        <div
+          class="p-4 border-t border-gray-700 flex justify-end space-x-3 shrink-0 bg-gray-800/50 rounded-b-lg"
+        >
+          <button
+            onclick="
+              document.getElementById('modal-problem').classList.add('hidden')
+            "
+            class="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            id="btn-save-prob"
+            class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors shadow-lg shadow-blue-500/20"
+          >
+            Lưu Bài Tập
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Modal Quản lý Testcase -->
+    <div
+      id="modal-testcase"
+      class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 transition-opacity"
+    >
+      <div
+        class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]"
+      >
+        <div
+          class="p-4 border-b border-gray-700 flex justify-between items-center shrink-0"
+        >
+          <h3 class="text-xl font-bold text-white">
+            Quản lý Testcases:
+            <span id="admin-tc-prob-name" class="text-blue-400"></span>
+          </h3>
+          <button
+            onclick="
+              document.getElementById('modal-testcase').classList.add('hidden')
+            "
+            class="text-gray-400 hover:text-red-400 transition-colors"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-1 space-y-6">
+          <input type="hidden" id="admin-tc-prob-id" />
+
+          <!-- Bảng danh sách testcase hiện tại -->
+          <div>
+            <h4 class="text-sm font-semibold text-gray-300 mb-2">
+              Các Testcase đang có trên Server
+            </h4>
+            <div
+              class="bg-gray-900 rounded border border-gray-700 max-h-64 overflow-y-auto"
+            >
+              <table
+                class="w-full text-left text-sm text-gray-300 border-collapse"
+              >
+                <thead
+                  class="bg-black sticky top-0 border-b border-gray-700 shadow z-10"
+                >
+                  <tr>
+                    <th class="p-2 w-20 text-center">Tên</th>
+                    <th class="p-2 text-center">File .in (Size)</th>
+                    <th class="p-2 text-center">File .out (Size)</th>
+                    <th class="p-2 w-20 text-center">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-tc-list" class="divide-y divide-gray-800">
+                  <!-- JS sẽ render file vào đây -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Khu vực Upload testcase mới -->
+          <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+            <h4 class="text-sm font-semibold text-gray-300 mb-2">
+              Thêm Testcase mới
+            </h4>
+            <input
+              type="file"
+              id="admin-tc-files"
+              multiple
+              accept=".in,.out"
+              class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 text-sm focus:outline-none mb-2"
+            />
+            <p class="text-xs text-yellow-500 italic">
+              * Upload nhiều file cùng lúc. Đặt tên khớp nhau (VD: 1.in, 1.out).
+              Sẽ tự động ghi đè nếu trùng tên.
+            </p>
+            <button
+              id="btn-save-testcase"
+              class="w-full mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-colors shadow"
+            >
+              Up File Lên Server
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 3. Modal Tạo/Sửa Kỳ Thi (Contest) -->
+    <div
+      id="modal-contest"
+      class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 transition-opacity"
+    >
+      <div
+        class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]"
+      >
+        <div
+          class="p-4 border-b border-gray-700 flex justify-between items-center shrink-0"
+        >
+          <h3 id="modal-contest-title" class="text-xl font-bold text-white">
+            Tạo Kỳ Thi Mới
+          </h3>
+          <button
+            onclick="
+              document.getElementById('modal-contest').classList.add('hidden')
+            "
+            class="text-gray-400 hover:text-red-400 transition-colors"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto space-y-4">
+          <input type="hidden" id="admin-contest-id" />
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-1"
+              >Tên kỳ thi</label
+            ><input
+              type="text"
+              id="admin-contest-name"
+              class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-1"
+              >Mô tả ngắn</label
+            ><textarea
+              id="admin-contest-desc"
+              rows="2"
+              class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+            ></textarea>
+          </div>
+          <div class="grid grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"
+                >Thời gian Bắt đầu</label
+              ><input
+                type="datetime-local"
+                id="admin-contest-start"
+                class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+                style="color-scheme: dark"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"
+                >Thời gian Kết thúc</label
+              ><input
+                type="datetime-local"
+                id="admin-contest-end"
+                class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+                style="color-scheme: dark"
+              />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"
+                >Mật khẩu (Để trống nếu Public)</label
+              ><input
+                type="text"
+                id="admin-contest-pwd"
+                class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"
+                >ID Bài tập (Cách nhau dấu phẩy. VD: 1, 3, 5)</label
+              ><input
+                type="text"
+                id="admin-contest-probs"
+                class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+              />
+            </div>
+          </div>
+        </div>
+        <div
+          class="p-4 border-t border-gray-700 flex justify-end space-x-3 bg-gray-800/50 rounded-b-lg"
+        >
+          <button
+            onclick="
+              document.getElementById('modal-contest').classList.add('hidden')
+            "
+            class="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            id="btn-save-contest"
+            class="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded font-bold transition-colors shadow-lg"
+          >
+            Lưu Kỳ Thi
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Modal Xem Nội Dung File Testcase -->
+    <div
+      id="modal-view-file"
+      class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[60] transition-opacity"
+    >
+      <div
+        class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]"
+      >
+        <div
+          class="p-4 border-b border-gray-700 flex justify-between items-center shrink-0 bg-black rounded-t-lg"
+        >
+          <h3 class="text-lg font-bold text-white flex items-center">
+            <svg
+              class="w-5 h-5 mr-2 text-blue-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              ></path>
+            </svg>
+            File:
+            <span
+              id="modal-view-file-title"
+              class="ml-2 text-blue-400 font-mono"
+            ></span>
+          </h3>
+          <button
+            onclick="
+              document.getElementById('modal-view-file').classList.add('hidden')
+            "
+            class="text-gray-400 hover:text-red-400 transition-colors"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-0 flex-1 overflow-hidden flex flex-col">
+          <!-- Textarea readonly để hiện code -->
+          <textarea
+            id="modal-view-file-content"
+            readonly
+            class="w-full h-full min-h-[500px] bg-[#0d1117] text-[#56d364] font-mono text-sm p-4 outline-none resize-none whitespace-pre border-none"
+          ></textarea>
+        </div>
+        <div
+          class="p-3 border-t border-gray-700 flex justify-end bg-gray-800/80 rounded-b-lg"
+        >
+          <button
+            onclick="
+              document.getElementById('modal-view-file').classList.add('hidden')
+            "
+            class="px-6 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors border border-gray-600"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Modal Sửa User -->
+    <div
+      id="modal-user"
+      class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 transition-opacity"
+    >
+      <div
+        class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-md shadow-2xl flex flex-col"
+      >
+        <div
+          class="p-4 border-b border-gray-700 flex justify-between items-center bg-black rounded-t-lg"
+        >
+          <h3 class="text-xl font-bold text-white">
+            Cập nhật User:
+            <span id="admin-user-name" class="text-blue-400"></span>
+          </h3>
+          <button
+            onclick="
+              document.getElementById('modal-user').classList.add('hidden')
+            "
+            class="text-gray-400 hover:text-red-400 transition-colors"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <input type="hidden" id="admin-user-id" />
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-1"
+              >Chức vụ (Role)</label
+            >
+            <select
+              id="admin-user-role"
+              class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+            >
+              <option value="CONTESTANT">CONTESTANT (Thí sinh)</option>
+              <option value="ADMIN">ADMIN (Quản trị viên)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-1"
+              >Đổi mật khẩu mới (Bỏ trống nếu không đổi)</label
+            >
+            <input
+              type="password"
+              id="admin-user-pwd"
+              placeholder="Nhập mật khẩu mới..."
+              class="w-full bg-gray-900 text-white border border-gray-600 rounded p-2 focus:border-blue-500 outline-none"
+            />
+          </div>
+        </div>
+        <div
+          class="p-4 border-t border-gray-700 flex justify-end space-x-3 bg-gray-800/50 rounded-b-lg"
+        >
+          <button
+            onclick="
+              document.getElementById('modal-user').classList.add('hidden')
+            "
+            class="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium transition-colors border border-gray-600"
+          >
+            Hủy
+          </button>
+          <button
+            id="btn-save-user"
+            class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-colors shadow-lg"
+          >
+            Lưu Thay Đổi
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Toast Notification -->
     <div

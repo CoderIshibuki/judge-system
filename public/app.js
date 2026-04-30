@@ -209,6 +209,169 @@ document.addEventListener("DOMContentLoaded", () => {
           '<div class="p-4 text-gray-500 italic">Ready to judge.</div>';
     },
 
+    adminAllUsers: [],
+
+    fetchAdminUsers: async function () {
+      if (this.role !== "ADMIN") return;
+      try {
+        const res = await fetch("/api/admin/users", {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        const data = await res.json();
+        if (data.success) {
+          this.adminAllUsers = data.users;
+          const tbody = document.getElementById("admin-users-list");
+          tbody.innerHTML = "";
+          data.users.forEach((u) => {
+            const roleHtml =
+              u.role === "ADMIN"
+                ? `<span class="bg-red-900/40 text-red-500 border border-red-700 px-2 py-0.5 rounded text-xs font-bold">ADMIN</span>`
+                : `<span class="bg-gray-700 text-gray-300 border border-gray-600 px-2 py-0.5 rounded text-xs font-semibold">CONTESTANT</span>`;
+
+            const tr = document.createElement("tr");
+            tr.className =
+              "hover:bg-gray-700/50 transition-colors border-b border-gray-700";
+            tr.innerHTML = `
+                            <td class="p-3 text-center text-gray-400">${u.id}</td>
+                            <td class="p-3 text-blue-400 font-semibold">${u.username}</td>
+                            <td class="p-3 text-center">${roleHtml}</td>
+                            <td class="p-3 flex justify-center space-x-2">
+                                <button onclick="app.openUserModal(${u.id})" class="px-2 py-1 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600 hover:text-white rounded text-xs border border-yellow-700 transition">Sửa</button>
+                                <button onclick="app.deleteUser(${u.id})" class="px-2 py-1 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded text-xs border border-red-700 transition">Xóa</button>
+                            </td>
+                        `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    },
+
+    deleteUser: async function (id) {
+      if (!confirm(`Xóa User #${id}? Mọi bài nộp của người này cũng sẽ mất!`))
+        return;
+      try {
+        const res = await fetch(`/api/admin/users/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        if ((await res.json()).success) {
+          showToast("Đã xoá User!", "bg-red-500");
+          this.fetchAdminUsers();
+        }
+      } catch (e) {
+        showToast("Lỗi xóa user", "bg-red-500");
+      }
+    },
+
+    openUserModal: function (id) {
+      const u = this.adminAllUsers.find((x) => x.id === id);
+      if (!u) return;
+      document.getElementById("admin-user-id").value = id;
+      document.getElementById("admin-user-name").textContent = u.username;
+      document.getElementById("admin-user-role").value = u.role;
+      document.getElementById("admin-user-pwd").value = ""; // Luôn để trống pass
+
+      const modal = document.getElementById("modal-user");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    },
+
+    // HÀM LOAD DANH SÁCH TESTCASE CỦA 1 BÀI
+    fetchTestcases: async function (probId) {
+      const tbody = document.getElementById("admin-tc-list");
+      tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Đang quét thư mục...</td></tr>`;
+      try {
+        const res = await fetch(`/api/admin/problems/${probId}/testcases`, {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        const data = await res.json();
+        if (data.success) {
+          tbody.innerHTML = "";
+          if (data.testcases.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500 italic">Thư mục trống. Chưa có testcase nào.</td></tr>`;
+            return;
+          }
+          data.testcases.forEach((tc) => {
+            const inSize = (tc.inSize / 1024).toFixed(1) + " KB";
+            const outSize = (tc.outSize / 1024).toFixed(1) + " KB";
+            const tr = document.createElement("tr");
+            tr.className = "hover:bg-gray-800 transition-colors";
+            tr.innerHTML = `
+                            <td class="p-2 text-center font-bold text-gray-300">${tc.name}</td>
+                            <td class="p-2 text-center text-gray-400 group">
+                                <span class="cursor-pointer hover:text-blue-400 transition-colors flex items-center justify-center" onclick="app.viewTestcaseFile(${probId}, '${tc.name}', 'in')">
+                                    ${tc.name}.in <span class="text-xs text-gray-600 ml-1">(${inSize})</span>
+                                    <svg class="w-4 h-4 ml-2 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                </span>
+                            </td>
+                            <td class="p-2 text-center text-gray-400 group">
+                                <span class="cursor-pointer hover:text-blue-400 transition-colors flex items-center justify-center" onclick="app.viewTestcaseFile(${probId}, '${tc.name}', 'out')">
+                                    ${tc.name}.out <span class="text-xs text-gray-600 ml-1">(${outSize})</span>
+                                    <svg class="w-4 h-4 ml-2 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                </span>
+                            </td>
+                            <td class="p-2 text-center">
+                                <button onclick="app.deleteTestcase(${probId}, '${tc.name}')" class="text-red-500 hover:text-red-400 transition-colors bg-red-900/30 p-1.5 rounded" title="Xóa">
+                                    <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                            </td>
+                        `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Lỗi kết nối</td></tr>`;
+      }
+    },
+
+    // HÀM XÓA 1 BỘ TESTCASE
+    deleteTestcase: async function (probId, name) {
+      if (!confirm(`Xóa bộ testcase "${name}.in" và "${name}.out"?`)) return;
+      try {
+        const res = await fetch(
+          `/api/admin/problems/${probId}/testcases/${name}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: "Bearer " + this.token },
+          },
+        );
+        if ((await res.json()).success) {
+          showToast(`Đã xóa Testcase ${name}`, "bg-red-500");
+          this.fetchTestcases(probId); // Load lại bảng file ngay lập tức
+        }
+      } catch (e) {
+        showToast("Lỗi xóa testcase", "bg-red-500");
+      }
+    },
+
+    viewTestcaseFile: async function (probId, name, ext) {
+      try {
+        const res = await fetch(
+          `/api/admin/problems/${probId}/testcases/${name}/${ext}`,
+          {
+            headers: { Authorization: "Bearer " + this.token },
+          },
+        );
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById("modal-view-file-title").textContent =
+            `${name}.${ext}`;
+          document.getElementById("modal-view-file-content").value =
+            data.content;
+
+          const modal = document.getElementById("modal-view-file");
+          modal.classList.remove("hidden");
+          modal.classList.add("flex");
+        } else {
+          showToast("Lỗi: " + data.error, "bg-red-500");
+        }
+      } catch (e) {
+        showToast("Lỗi tải file", "bg-red-500");
+      }
+    },
+
     fetchSubmissions: async function () {
       try {
         const res = await fetch("/api/submissions");
@@ -315,6 +478,137 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {
         console.error("Error fetching leaderboard", e);
       }
+    },
+
+    adminAllContests: [], // Chứa dữ liệu Contest
+
+    // HÀM XÓA BÀI TẬP
+    deleteProblem: async function (id) {
+      if (
+        !confirm(
+          `CẢNH BÁO: Xóa bài tập #${id} sẽ xóa luôn TẤT CẢ bài nộp của user liên quan tới bài này. Bạn chắc chắn chứ?`,
+        )
+      )
+        return;
+      try {
+        const res = await fetch(`/api/admin/problems/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        if ((await res.json()).success) {
+          showToast("Đã xóa bài tập!", "bg-red-500");
+          this.fetchAdminProblems();
+          this.fetchProblems();
+        }
+      } catch (e) {
+        showToast("Lỗi xóa bài", "bg-red-500");
+      }
+    },
+
+    // HÀM LOAD BẢNG CONTEST ADMIN
+    fetchAdminContests: async function () {
+      if (this.role !== "ADMIN") return;
+      try {
+        const res = await fetch("/api/admin/contests", {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        const data = await res.json();
+        if (data.success) {
+          this.adminAllContests = data.contests;
+          const tbody = document.getElementById("admin-contests-list");
+          tbody.innerHTML = "";
+          data.contests.forEach((c) => {
+            // Cắt lấy giờ/ngày cho gọn
+            const start = new Date(c.startTime).toLocaleString("vi-VN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              day: "2-digit",
+              month: "2-digit",
+            });
+            const pwdIcon = c.password ? "🔒" : "🔓";
+
+            const tr = document.createElement("tr");
+            tr.className =
+              "hover:bg-gray-700/50 transition-colors border-b border-gray-700";
+            tr.innerHTML = `
+                            <td class="p-3 text-center text-gray-400">${c.id}</td>
+                            <td class="p-3 text-purple-400 font-semibold">${pwdIcon} ${c.title}</td>
+                            <td class="p-3 text-center text-xs text-gray-400">${start}</td>
+                            <td class="p-3 flex justify-center space-x-2">
+                                <button onclick="app.openContestModal(${c.id})" class="px-2 py-1 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600 hover:text-white rounded text-xs border border-yellow-700 transition">Sửa</button>
+                                <button onclick="app.deleteContest(${c.id})" class="px-2 py-1 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded text-xs border border-red-700 transition">Xóa</button>
+                            </td>
+                        `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    },
+
+    // HÀM XÓA CONTEST
+    deleteContest: async function (id) {
+      if (!confirm(`Xóa kỳ thi #${id}? (Không ảnh hưởng đến bài tập gốc)`))
+        return;
+      try {
+        const res = await fetch(`/api/admin/contests/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        if ((await res.json()).success) {
+          showToast("Đã xóa kỳ thi!", "bg-red-500");
+          this.fetchAdminContests();
+          this.fetchContests(); // Reset bảng ngoài
+        }
+      } catch (e) {
+        showToast("Lỗi", "bg-red-500");
+      }
+    },
+
+    // MỞ MODAL CONTEST
+    openContestModal: function (id = null) {
+      const modal = document.getElementById("modal-contest");
+      document.getElementById("admin-contest-id").value = id || "";
+      document.getElementById("modal-contest-title").textContent = id
+        ? `Sửa Kỳ Thi #${id}`
+        : "Tạo Kỳ Thi Mới";
+
+      if (id) {
+        const c = this.adminAllContests.find((x) => x.id === id);
+        if (c) {
+          // Đổ dữ liệu cũ vào form
+          document.getElementById("admin-contest-name").value = c.title;
+          document.getElementById("admin-contest-desc").value =
+            c.description || "";
+          document.getElementById("admin-contest-pwd").value = c.password || "";
+          // Ép định dạng datetime-local (Bỏ phần Z và giây phía sau)
+          document.getElementById("admin-contest-start").value = new Date(
+            c.startTime,
+          )
+            .toISOString()
+            .slice(0, 16);
+          document.getElementById("admin-contest-end").value = new Date(
+            c.endTime,
+          )
+            .toISOString()
+            .slice(0, 16);
+          // Lấy các ID bài tập hiện có
+          document.getElementById("admin-contest-probs").value = c.problems
+            ? c.problems.map((p) => p.id).join(", ")
+            : "";
+        }
+      } else {
+        // Form rỗng
+        document.getElementById("admin-contest-name").value = "";
+        document.getElementById("admin-contest-desc").value = "";
+        document.getElementById("admin-contest-pwd").value = "";
+        document.getElementById("admin-contest-start").value = "";
+        document.getElementById("admin-contest-end").value = "";
+        document.getElementById("admin-contest-probs").value = "";
+      }
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
     },
   };
 
@@ -691,6 +985,317 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // === 8. QUẢN LÝ ADMIN (MODALS & TABS) ===
+  const tabAdminProbs = document.getElementById("tab-admin-probs");
+  const tabAdminContests = document.getElementById("tab-admin-contests");
+  const viewAdminProbs = document.getElementById("admin-view-probs");
+  const viewAdminContests = document.getElementById("admin-view-contests");
+
+  // chuyen tab
+  // Logic chuyển 3 Tab Admin
+  const adminTabs = ["probs", "contests", "users"];
+  adminTabs.forEach((tab) => {
+    const btn = document.getElementById(`tab-admin-${tab}`);
+    if (btn) {
+      btn.addEventListener("click", () => {
+        adminTabs.forEach((t) => {
+          document.getElementById(`admin-view-${t}`).classList.add("hidden");
+          document.getElementById(`tab-admin-${t}`).className =
+            "px-4 py-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-sm font-medium";
+        });
+        document.getElementById(`admin-view-${tab}`).classList.remove("hidden");
+        btn.className =
+          "px-4 py-1.5 rounded bg-gray-700 text-white font-medium shadow transition-colors text-sm";
+      });
+    }
+  });
+
+  // Gắn thêm các hàm Quản lý Bài Tập vào `window.app`
+  Object.assign(window.app, {
+    adminAllProblems: [],
+
+    // Load danh sách vào Bảng Admin
+    fetchAdminProblems: async function () {
+      if (this.role !== "ADMIN") return;
+      try {
+        const res = await fetch("/api/admin/problems", {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        const data = await res.json();
+        if (data.success) {
+          this.adminAllProblems = data.problems;
+          const tbody = document.getElementById("admin-probs-list");
+          tbody.innerHTML = "";
+          data.problems.forEach((p) => {
+            const isPub = p.isPublic;
+            const statusHtml = isPub
+              ? `<span class="bg-green-900/40 text-green-400 border border-green-700 px-2 py-0.5 rounded text-xs font-semibold">Public</span>`
+              : `<span class="bg-gray-700 text-gray-400 border border-gray-600 px-2 py-0.5 rounded text-xs font-semibold">Hidden</span>`;
+
+            const toggleBtnText = isPub ? "Hide" : "Publish";
+            const toggleBtnClass = isPub
+              ? "bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600"
+              : "bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white border-green-700";
+
+            const tr = document.createElement("tr");
+            tr.className =
+              "hover:bg-gray-700/50 transition-colors border-b border-gray-700";
+            tr.innerHTML = `
+                            <td class="p-3 text-center text-gray-400">${p.id}</td>
+                            <td class="p-3 text-blue-400 font-semibold">${p.title}</td>
+                            <td class="p-3 text-center">${statusHtml}</td>
+                            <td class="p-3 flex justify-center space-x-2">
+                                <button onclick="app.openProbModal(${p.id})" class="px-2 py-1 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600 hover:text-white rounded text-xs border border-yellow-700 transition">Sửa</button>
+                                <button onclick="app.openTcModal(${p.id})" class="px-2 py-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded text-xs border border-blue-700 transition">Testcases</button>
+                                <button onclick="app.toggleProblem(${p.id})" class="px-2 py-1 ${toggleBtnClass} rounded text-xs border transition">${toggleBtnText}</button>
+                                <button onclick="app.deleteProblem(${p.id})" class="px-2 py-1 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded text-xs border border-red-700 transition">Xóa</button>
+                            </td>
+                        `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    },
+
+    // API Ẩn/Hiện bài
+    toggleProblem: async function (id) {
+      try {
+        const res = await fetch(`/api/admin/problems/${id}/toggle`, {
+          method: "POST",
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(
+            data.isPublic ? "Đã Public bài tập!" : "Đã Ẩn bài tập!",
+            data.isPublic ? "bg-green-500" : "bg-gray-600",
+          );
+          this.fetchAdminProblems();
+          this.fetchProblems(); // Cập nhật cả list ngoài
+        }
+      } catch (e) {
+        showToast("Lỗi kết nối", "bg-red-500");
+      }
+    },
+
+    // Mở Modal Bài Tập (Dùng chung cho Tạo Mới & Sửa)
+    openProbModal: function (id = null) {
+      const modal = document.getElementById("modal-problem");
+      document.getElementById("admin-prob-id").value = id || "";
+      document.getElementById("modal-prob-title").textContent = id
+        ? `Sửa Bài Tập #${id}`
+        : "Tạo Bài Tập Mới";
+
+      if (id) {
+        const p = this.adminAllProblems.find((x) => x.id === id);
+        if (p) {
+          document.getElementById("admin-prob-name").value = p.title;
+          document.getElementById("admin-prob-time").value = p.timeLimitMs;
+          document.getElementById("admin-prob-mem").value = p.memoryLimitKb;
+          document.getElementById("admin-prob-points").value = p.points;
+          document.getElementById("admin-prob-desc").value = p.description;
+        }
+      } else {
+        // Reset form rỗng
+        document.getElementById("admin-prob-name").value = "";
+        document.getElementById("admin-prob-desc").value = "";
+      }
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    },
+
+    // Mở Modal Testcase
+    openTcModal: function (id) {
+      const p = this.adminAllProblems.find((x) => x.id === id);
+      if (!p) return;
+      document.getElementById("admin-tc-prob-id").value = id;
+      document.getElementById("admin-tc-prob-name").textContent = p.title;
+      document.getElementById("admin-tc-files").value = "";
+
+      const modal = document.getElementById("modal-testcase");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+
+      // Gọi API quét file
+      this.fetchTestcases(id);
+    },
+  });
+
+  // Bắt sự kiện bấm nút Tạo Bài Tập
+  document
+    .getElementById("btn-show-add-prob")
+    ?.addEventListener("click", () => app.openProbModal());
+
+  // Submit form Lưu Bài Tập (Tạo mới)
+  document
+    .getElementById("btn-save-prob")
+    ?.addEventListener("click", async () => {
+      const id = document.getElementById("admin-prob-id").value;
+      const title = document.getElementById("admin-prob-name").value;
+      const timeLimitMs = document.getElementById("admin-prob-time").value;
+      const memoryLimitKb = document.getElementById("admin-prob-mem").value;
+      const points = document.getElementById("admin-prob-points").value;
+      const description = document.getElementById("admin-prob-desc").value;
+
+      if (!title || !description)
+        return showToast("Tên và Đề bài không được để trống", "bg-red-500");
+
+      // Ghi chú: Hiện tại Backend đang chỉ có API Tạo mới (POST /api/problems), nếu có id thì cần gọi API Sửa (PUT)
+      // Trong gói này ta tạm dùng POST để tạo mới. (Cần bổ sung API PUT sau).
+      const method = id ? "PUT" : "POST";
+      const url = id ? `/api/problems/${id}` : "/api/problems";
+
+      if (id)
+        return showToast(
+          "Chức năng cập nhật bài cũ đang viết API...",
+          "bg-yellow-500 text-black",
+        );
+
+      try {
+        const res = await fetch(url, {
+          method: method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + app.token,
+          },
+          body: JSON.stringify({
+            title,
+            timeLimitMs,
+            memoryLimitKb,
+            points,
+            description,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Lưu thành công!", "bg-green-500");
+          document.getElementById("modal-problem").classList.add("hidden");
+          app.fetchAdminProblems();
+          app.fetchProblems();
+        } else throw new Error(data.error);
+      } catch (e) {
+        showToast(e.message, "bg-red-500");
+      }
+    });
+
+  // Nút Upload Testcase
+  document
+    .getElementById("btn-save-testcase")
+    ?.addEventListener("click", async () => {
+      const probId = document.getElementById("admin-tc-prob-id").value;
+      const files = document.getElementById("admin-tc-files").files;
+      if (files.length === 0) return showToast("Chưa chọn file!", "bg-red-500");
+
+      document.getElementById("btn-save-testcase").textContent = "Uploading...";
+      const testcases = [];
+      for (const file of files) {
+        const content = await file.text();
+        testcases.push({ name: file.name, content: content });
+      }
+      try {
+        const res = await fetch(`/api/problems/${probId}/testcases`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + app.token,
+          },
+          body: JSON.stringify({ testcases }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Upload Testcases OK!", "bg-green-500");
+          document.getElementById("modal-testcase").classList.add("hidden");
+        } else throw new Error(data.error);
+      } catch (e) {
+        showToast(e.message, "bg-red-500");
+      }
+      document.getElementById("btn-save-testcase").textContent = "Upload";
+    });
+
+  // Nút Lưu Kỳ Thi (Thêm Mới / Cập Nhật)
+  document
+    .getElementById("btn-save-contest")
+    ?.addEventListener("click", async () => {
+      const id = document.getElementById("admin-contest-id").value;
+      const title = document.getElementById("admin-contest-name").value;
+      const description = document.getElementById("admin-contest-desc").value;
+      const password = document.getElementById("admin-contest-pwd").value;
+      const startTime = document.getElementById("admin-contest-start").value;
+      const endTime = document.getElementById("admin-contest-end").value;
+      const probsInput = document.getElementById("admin-contest-probs").value;
+
+      if (!title || !startTime || !endTime)
+        return showToast("Nhập đủ Tên và Thời gian", "bg-red-500");
+
+      const problemIds = probsInput
+        .split(",")
+        .map((p) => parseInt(p.trim()))
+        .filter((p) => !isNaN(p));
+      const method = id ? "PUT" : "POST";
+      const url = id ? `/api/admin/contests/${id}` : "/api/contests/create";
+
+      try {
+        const res = await fetch(url, {
+          method: method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + app.token,
+          },
+          body: JSON.stringify({
+            title,
+            description,
+            password,
+            startTime,
+            endTime,
+            problemIds,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Lưu Kỳ thi thành công!", "bg-green-500");
+          document.getElementById("modal-contest").classList.add("hidden");
+          app.fetchAdminContests();
+          app.fetchContests();
+        } else throw new Error(data.error);
+      } catch (e) {
+        showToast(e.message, "bg-red-500");
+      }
+    });
+
+  document
+    .getElementById("btn-show-add-contest")
+    ?.addEventListener("click", () => app.openContestModal());
+
+  // Cập nhật User
+  document
+    .getElementById("btn-save-user")
+    ?.addEventListener("click", async () => {
+      const id = document.getElementById("admin-user-id").value;
+      const role = document.getElementById("admin-user-role").value;
+      const password = document.getElementById("admin-user-pwd").value;
+
+      try {
+        const res = await fetch(`/api/admin/users/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + app.token,
+          },
+          body: JSON.stringify({ role, password }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Cập nhật quyền lực thành công!", "bg-green-500");
+          document.getElementById("modal-user").classList.add("hidden");
+          app.fetchAdminUsers();
+        } else throw new Error(data.error);
+      } catch (e) {
+        showToast(e.message, "bg-red-500");
+      }
+    });
+
   // === 7. KHỞI TẠO DỮ LIỆU BAN ĐẦU ===
   app.updateNavAuth();
   app.switchTab(app.token ? "problems-list-view" : "auth-view");
@@ -698,4 +1303,7 @@ document.addEventListener("DOMContentLoaded", () => {
   app.fetchSubmissions();
   app.fetchLeaderboard();
   app.fetchContests();
+  app.fetchAdminContests();
+  app.fetchAdminProblems();
+  app.fetchAdminUsers();
 });

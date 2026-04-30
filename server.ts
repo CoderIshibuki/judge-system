@@ -89,7 +89,7 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, {
       expiresIn: "1h",
     });
     res.json({ success: true, token });
@@ -118,7 +118,7 @@ const isAdmin = async (req: any, res: any, next: any) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
     });
-    if (user?.role !== "ADMIN") return res.sendStatus(403);
+    if (!req.user || req.user.role !== "ADMIN") return res.sendStatus(403);
     next();
   } catch (err) {
     res.sendStatus(500);
@@ -131,7 +131,9 @@ app.post(
   isAdmin,
   async (req: any, res: any) => {
     try {
-      const { title, description, timeLimitMs, memoryLimitKb } = req.body;
+      // Nhận thêm biến points
+      const { title, description, timeLimitMs, memoryLimitKb, points } =
+        req.body;
       if (!title || !description)
         return res
           .status(400)
@@ -141,14 +143,387 @@ app.post(
         data: {
           title,
           description,
-          timeLimitMs: timeLimitMs || 1000,
-          memoryLimitKb: memoryLimitKb || 256000,
+          timeLimitMs: Number(timeLimitMs) || 1000,
+          memoryLimitKb: Number(memoryLimitKb) || 256000,
+          points: Number(points) || 100, // Lưu điểm vào DB
         },
       });
       res.status(201).json({ success: true, problem });
     } catch (error) {
       console.error("Error creating problem:", error);
       res.status(500).json({ error: "Failed to create problem" });
+    }
+  },
+);
+
+// Lấy TẤT CẢ bài tập cho Admin Dashboard (Bao gồm cả bài đang ẩn)
+app.get(
+  "/api/admin/problems",
+  authenticateToken,
+  isAdmin,
+  async (_req: any, res: any) => {
+    try {
+      const problems = await prisma.problem.findMany({
+        orderBy: { id: "desc" },
+      });
+      res.json({ success: true, problems });
+    } catch (error) {
+      console.error("Error fetching admin problems:", error);
+      res.status(500).json({ error: "Failed to fetch admin problems" });
+    }
+  },
+);
+
+// SỬA BÀI TẬP (Cập nhật)
+app.put(
+  "/api/problems/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const { title, description, timeLimitMs, memoryLimitKb, points } =
+        req.body;
+      const problem = await prisma.problem.update({
+        where: { id: parseInt(req.params.id) },
+        data: {
+          title,
+          description,
+          timeLimitMs: Number(timeLimitMs),
+          memoryLimitKb: Number(memoryLimitKb),
+          points: Number(points),
+        },
+      });
+      res.json({ success: true, problem });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi cập nhật bài tập" });
+    }
+  },
+);
+
+// XÓA BÀI TẬP
+app.delete(
+  "/api/admin/problems/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const id = parseInt(req.params.id);
+      // Xóa các Submissions liên quan trước để tránh lỗi Khóa ngoại
+      await prisma.submission.deleteMany({ where: { problemId: id } });
+      await prisma.problem.delete({ where: { id } });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi xóa bài tập" });
+    }
+  },
+);
+
+// LẤY DANH SÁCH CONTEST CHO ADMIN (Lấy kèm danh sách ID bài tập bên trong)
+app.get(
+  "/api/admin/contests",
+  authenticateToken,
+  isAdmin,
+  async (_req: any, res: any) => {
+    try {
+      const contests = await prisma.contest.findMany({
+        include: { problems: true },
+        orderBy: { id: "desc" },
+      });
+      res.json({ success: true, contests });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi fetch contests" });
+    }
+  },
+);
+
+// SỬA KỲ THI
+app.put(
+  "/api/admin/contests/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const { title, description, startTime, endTime, password, problemIds } =
+        req.body;
+      const connectProblems = problemIds
+        ? problemIds.map((id: number) => ({ id: Number(id) }))
+        : [];
+
+      const contest = await prisma.contest.update({
+        where: { id: parseInt(req.params.id) },
+        data: {
+          title,
+          description,
+          startTime: new Date(startTime),
+          endTime: new Date(endTime),
+          password,
+          problems: { set: connectProblems }, // Set lại danh sách bài tập mới
+        },
+      });
+      res.json({ success: true, contest });
+    } catch (err) {
+      res.status(500).json({ error: "Lỗi cập nhật kỳ thi" });
+    }
+  },
+);
+
+// XÓA KỲ THI
+app.delete(
+  "/api/admin/contests/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      await prisma.contest.delete({ where: { id: parseInt(req.params.id) } });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi xóa Contest" });
+    }
+  },
+);
+
+// LẤY DANH SÁCH FILE TESTCASE (Đọc từ ổ cứng)
+app.get(
+  "/api/admin/problems/:id/testcases",
+  authenticateToken,
+  isAdmin,
+  (req: any, res: any) => {
+    try {
+      const problemId = req.params.id;
+      const testcasesDir = path.join(
+        process.cwd(),
+        "problem",
+        String(problemId),
+        "testcases",
+      );
+
+      if (!fs.existsSync(testcasesDir)) {
+        return res.json({ success: true, testcases: [] });
+      }
+
+      const files = fs.readdirSync(testcasesDir);
+      const tcMap = new Map<string, any>();
+
+      files.forEach((file) => {
+        const ext = path.extname(file);
+        const base = path.basename(file, ext);
+        if (ext === ".in" || ext === ".out") {
+          if (!tcMap.has(base))
+            tcMap.set(base, { name: base, inSize: 0, outSize: 0 });
+          const stats = fs.statSync(path.join(testcasesDir, file));
+          if (ext === ".in") tcMap.get(base).inSize = stats.size;
+          if (ext === ".out") tcMap.get(base).outSize = stats.size;
+        }
+      });
+
+      // Sắp xếp tên file theo thứ tự số (1, 2, 3...) thay vì chữ (1, 10, 2)
+      const testcases = Array.from(tcMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true }),
+      );
+      res.json({ success: true, testcases });
+    } catch (error) {
+      console.error("Error fetching testcases:", error);
+      res.status(500).json({ error: "Lỗi đọc danh sách testcase" });
+    }
+  },
+);
+
+// LẤY DANH SÁCH USER
+app.get(
+  "/api/admin/users",
+  authenticateToken,
+  isAdmin,
+  async (_req: any, res: any) => {
+    try {
+      const users = await prisma.user.findMany({
+        select: { id: true, username: true, role: true, rating: true },
+        orderBy: { id: "desc" },
+      });
+      res.json({ success: true, users });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi lấy danh sách user" });
+    }
+  },
+);
+
+// CẬP NHẬT USER (Role & Mật khẩu)
+app.put(
+  "/api/admin/users/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const { role, password } = req.body;
+      const dataToUpdate: any = { role };
+
+      // Nếu Admin có nhập pass mới thì mới đổi, không thì giữ nguyên
+      if (password && password.trim() !== "") {
+        dataToUpdate.passwordHash = await bcrypt.hash(password, 10);
+      }
+
+      const user = await prisma.user.update({
+        where: { id: parseInt(req.params.id) },
+        data: dataToUpdate,
+        select: { id: true, username: true, role: true },
+      });
+      res.json({ success: true, user });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi cập nhật user" });
+    }
+  },
+);
+
+// XÓA USER
+app.delete(
+  "/api/admin/users/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const id = parseInt(req.params.id);
+      // Xóa sạch bài nộp của User này trước để tránh lỗi dữ liệu
+      await prisma.submission.deleteMany({ where: { userId: id } });
+      await prisma.user.delete({ where: { id } });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi xóa user" });
+    }
+  },
+);
+
+// XÓA tétcase
+app.delete(
+  "/api/admin/problems/:id/testcases/:name",
+  authenticateToken,
+  isAdmin,
+  (req: any, res: any) => {
+    try {
+      const { id, name } = req.params;
+      const testcasesDir = path.join(
+        process.cwd(),
+        "problem",
+        String(id),
+        "testcases",
+      );
+      const inPath = path.join(testcasesDir, `${name}.in`);
+      const outPath = path.join(testcasesDir, `${name}.out`);
+
+      if (fs.existsSync(inPath)) fs.unlinkSync(inPath);
+      if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi xóa testcase" });
+    }
+  },
+);
+
+// Chuyển đổi trạng thái Ẩn/Hiện của bài tập (Public/Hidden)
+app.post(
+  "/api/admin/problems/:id/toggle",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const problemId = parseInt(req.params.id);
+      const problem = await prisma.problem.findUnique({
+        where: { id: problemId },
+      });
+      if (!problem)
+        return res.status(404).json({ error: "Không tìm thấy bài tập" });
+
+      const updatedProblem = await prisma.problem.update({
+        where: { id: problemId },
+        data: { isPublic: !problem.isPublic },
+      });
+
+      res.json({ success: true, isPublic: updatedProblem.isPublic });
+    } catch (error) {
+      console.error("Error toggling problem:", error);
+      res.status(500).json({ error: "Failed to toggle problem status" });
+    }
+  },
+);
+
+// ĐỌC NỘI DUNG FILE TESTCASE
+app.get(
+  "/api/admin/problems/:id/testcases/:name/:ext",
+  authenticateToken,
+  isAdmin,
+  (req: any, res: any) => {
+    try {
+      const { id, name, ext } = req.params;
+      if (ext !== "in" && ext !== "out")
+        return res.status(400).json({ error: "File không hợp lệ" });
+
+      const filePath = path.join(
+        process.cwd(),
+        "problem",
+        String(id),
+        "testcases",
+        `${name}.${ext}`,
+      );
+      if (!fs.existsSync(filePath))
+        return res.status(404).json({ error: "File không tồn tại" });
+
+      // Giới hạn đọc 100KB đầu tiên để tránh treo trình duyệt nếu output quá to
+      const stats = fs.statSync(filePath);
+      const MAX_SIZE = 100 * 1024; // 100KB
+      let content = "";
+
+      if (stats.size > MAX_SIZE) {
+        const buffer = Buffer.alloc(MAX_SIZE);
+        const fd = fs.openSync(filePath, "r");
+        fs.readSync(fd, buffer, 0, MAX_SIZE, 0);
+        fs.closeSync(fd);
+        content =
+          buffer.toString("utf8") +
+          "\n\n... (File quá lớn, hệ thống chỉ hiển thị 100KB đầu tiên)";
+      } else {
+        content = fs.readFileSync(filePath, "utf8");
+      }
+
+      res.json({ success: true, content });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi đọc file" });
+    }
+  },
+);
+
+app.post(
+  "/api/contests/create",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const { title, description, startTime, endTime, password, problemIds } =
+        req.body;
+
+      if (!title || !startTime || !endTime) {
+        return res.status(400).json({ error: "Thiếu thông tin bắt buộc" });
+      }
+
+      // Chuyển mảng [1, 3, 5] thành cấu trúc Prisma yêu cầu
+      const connectProblems =
+        problemIds && problemIds.length > 0
+          ? problemIds.map((id: number) => ({ id: Number(id) }))
+          : [];
+
+      const contest = await prisma.contest.create({
+        data: {
+          title,
+          description,
+          startTime: new Date(startTime),
+          endTime: new Date(endTime),
+          password: password || null,
+          problems: { connect: connectProblems },
+        },
+      });
+
+      res.json({ success: true, contest });
+    } catch (err) {
+      console.error("Error creating contest:", err);
+      res.status(500).json({ error: "Lỗi tạo kỳ thi" });
     }
   },
 );
@@ -734,6 +1109,7 @@ app.get("/api/leaderboard", async (req, res) => {
 app.get("/problems", async (_req, res) => {
   try {
     const problems = await prisma.problem.findMany({
+      where: { isPublic: true },
       select: {
         id: true,
         title: true,

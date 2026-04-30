@@ -23,6 +23,7 @@ model Problem {
   timeLimitMs   Int          @default(1000)
   memoryLimitKb Int          @default(256000)
   points        Int          @default(100)
+  isPublic      Boolean      @default(true)
   testCases     TestCase[]
   submissions   Submission[]
   contests      Contest[]    @relation("ContestProblems") 
