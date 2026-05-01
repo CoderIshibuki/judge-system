@@ -59,6 +59,109 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
+    openEditContest: async function (id) {
+      try {
+        // Lấy lại danh sách để trích xuất data của kỳ thi này
+        const res = await fetch("/api/contests", {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        const data = await res.json();
+        const c = data.contests.find((x) => x.id === id);
+
+        if (c) {
+          document.getElementById("modal-contest-title").textContent =
+            "Sửa Kỳ Thi #" + c.id;
+          document.getElementById("admin-contest-id").value = c.id;
+          document.getElementById("admin-contest-name").value =
+            c.title || c.name || "";
+          document.getElementById("admin-contest-desc").value =
+            c.description || "";
+
+          // Hàm nhỏ để chuyển đổi Time Zone cho input datetime-local
+          const toLocal = (isoString) => {
+            if (!isoString) return "";
+            const date = new Date(isoString);
+            date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+            return date.toISOString().slice(0, 16);
+          };
+
+          document.getElementById("admin-contest-start").value = toLocal(
+            c.startTime,
+          );
+          document.getElementById("admin-contest-end").value = toLocal(
+            c.endTime,
+          );
+          document.getElementById("admin-contest-pwd").value = c.password || "";
+
+          // Lấy ra danh sách ID bài tập
+          const probIds = c.problems
+            ? c.problems.map((p) => p.id || p.problemId).join(", ")
+            : "";
+          document.getElementById("admin-contest-probs").value = probIds;
+
+          // Hiện Modal
+          const modal = document.getElementById("modal-contest");
+          modal.classList.remove("hidden");
+          modal.classList.add("flex");
+        }
+      } catch (e) {
+        showToast("Lỗi khi tải thông tin Kỳ thi!", "bg-red-500");
+      }
+    },
+
+    // HÀM MỞ GIAO DIỆN LÀM BÀI (PHIÊN BẢN MÁY QUÉT X-QUANG)
+    viewProblem: async function (id) {
+      try {
+        this.switchTab("editor-view");
+        document.getElementById("active-problem-title").textContent =
+          "⏳ Đang tải đề bài...";
+        document.getElementById("active-problem-desc").innerHTML =
+          "Vui lòng đợi trong giây lát...";
+
+        console.log("👉 Đang gọi API lấy đề bài ID:", id); // Test xem ID có bị undefined không
+
+        const res = await fetch(`/api/problems/${id}`, {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+
+        // DÙNG X-QUANG: Đọc nguyên bản câu trả lời của Server trước khi ép sang JSON
+        const text = await res.text();
+        console.log("👉 Server trả về nguyên bản:", text);
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          // Nếu Server trả về HTML lỗi 404/500, in thẳng lên màn hình làm bài luôn!
+          document.getElementById("active-problem-title").textContent =
+            "Lỗi Server 💥";
+          document.getElementById("active-problem-desc").innerHTML =
+            `<pre class="text-red-500 whitespace-pre-wrap">${text}</pre>`;
+          return showToast(
+            "Server bị lỗi nội bộ! Xem khung đề bài.",
+            "bg-red-500",
+          );
+        }
+
+        if (data.success) {
+          const prob = data.problem;
+          document.getElementById("active-problem-title").textContent =
+            prob.title || `Bài tập #${prob.id}`;
+          document.getElementById("active-problem-limits").textContent =
+            `Time: ${prob.timeLimitMs}ms | Mem: ${prob.memoryLimitKb}KB`;
+          document.getElementById("active-problem-desc").innerHTML =
+            prob.description || "Không có mô tả chi tiết.";
+          this.currentProblemId = prob.id;
+        } else {
+          showToast(data.error || "Không tìm thấy đề bài!", "bg-red-500");
+          this.switchTab("problems-list-view");
+        }
+      } catch (e) {
+        console.error("Lỗi xem đề bài:", e);
+        showToast("Mất kết nối hoàn toàn với Server!", "bg-red-500");
+      }
+    },
+
     openChangePwdModal: function () {
       document.getElementById("user-old-pwd").value = "";
       document.getElementById("user-new-pwd").value = "";
@@ -90,76 +193,136 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
+    // 1. HÀM MỞ MODAL THÊM USER (Làm sạch form cũ nếu có)
+    openAddUserModal: function () {
+      document.getElementById("add-username").value = "";
+      document.getElementById("add-password").value = "";
+      document.getElementById("add-role").value = "CONTESTANT";
+
+      const modal = document.getElementById("modal-add-user");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    },
+
+    // 2. HÀM GỬI DATA LÊN API ĐỂ TẠO USER
+    submitAddUser: async function () {
+      const username = document.getElementById("add-username").value.trim();
+      const password = document.getElementById("add-password").value;
+      const role = document.getElementById("add-role").value;
+
+      if (!username) return showToast("Vui lòng nhập Username!", "bg-red-500");
+
+      try {
+        const res = await fetch("/api/admin/users/single", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + this.token,
+          },
+          body: JSON.stringify({ username, password, role }),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast("Đã thêm User thành công!", "bg-green-500");
+          document.getElementById("modal-add-user").classList.add("hidden"); // Đóng form
+          this.fetchAdminUsers(); // Load lại bảng danh sách User ngay lập tức
+        } else {
+          showToast(data.error || "Lỗi khi thêm user", "bg-red-500");
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Lỗi kết nối với Server!", "bg-red-500");
+      }
+    },
+
     fetchContests: async function () {
+      const tbody = document.getElementById("contests-list");
+      tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-yellow-500 animate-pulse font-medium">⏳ Đang tải danh sách kỳ thi từ Server...</td></tr>`;
+
       try {
         const res = await fetch("/api/contests");
         const data = await res.json();
 
         if (data.success) {
-          const tbody = document.getElementById("contests-list");
           tbody.innerHTML = "";
-
-          if (data.contests.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">Hiện tại chưa có kỳ thi nào.</td></tr>`;
+          if (!data.contests || data.contests.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">Hiện tại chưa có kỳ thi nào được tạo!</td></tr>`;
             return;
           }
 
           data.contests.forEach((contest) => {
-            const tr = document.createElement("tr");
-            tr.className =
-              "hover:bg-gray-700/50 transition-colors cursor-pointer border-b border-gray-700";
-
-            // Tính toán thời gian
-            const startTime = new Date(contest.startTime);
-            const endTime = new Date(contest.endTime);
-            const durationMins = Math.round((endTime - startTime) / 60000); // Đổi ra phút
-
-            // Định dạng giờ: 15:00 - 30/04/2026
-            const timeStr =
-              startTime.toLocaleTimeString("vi-VN", {
+            // Xử lý Start Time
+            const startDate = new Date(contest.startTime);
+            const timeString =
+              startDate.toLocaleTimeString("vi-VN", {
                 hour: "2-digit",
                 minute: "2-digit",
               }) +
               " - " +
-              startTime.toLocaleDateString("vi-VN");
+              startDate.toLocaleDateString("vi-VN");
 
-            // Vẽ ổ khóa bảo mật
-            const accessHtml = contest.isPrivate
-              ? `<span class="text-red-400" title="Password Required">🔒 Private</span>`
-              : `<span class="text-green-500" title="Public Contest">🔓 Public</span>`;
+            // TÍNH DURATION TỰ ĐỘNG VÀ CHECK HẾT HẠN
+            let durationMins = "--";
+            let isEnded = false;
+            const now = new Date(); // Lấy thời gian hiện tại lúc tải trang
 
-            tr.innerHTML = `
-                            <td class="p-3 text-center border-r border-gray-700/50 text-gray-400">${contest.id}</td>
-                            <td class="p-3 border-r border-gray-700/50 text-blue-400 hover:text-blue-300 font-semibold">${contest.title}</td>
-                            <td class="p-3 text-center border-r border-gray-700/50 text-gray-300">${timeStr}</td>
-                            <td class="p-3 text-center border-r border-gray-700/50 text-gray-400">${durationMins} mins</td>
-                            <td class="p-3 text-center">${accessHtml}</td>
-                        `;
+            if (contest.endTime) {
+              const endDate = new Date(contest.endTime);
+              durationMins = Math.round((endDate - startDate) / 60000);
 
-            // Tạm thời hiển thị thông báo khi bấm vào
-            tr.onclick = () => {
-              if (contest.isPrivate) {
-                const pwd = prompt(
-                  "Phòng thi này yêu cầu mật khẩu. Vui lòng nhập mật khẩu:",
-                );
-                if (pwd)
-                  app.showToast(
-                    "Chức năng xác thực mật khẩu đang xây dựng!",
-                    "bg-yellow-500 text-yellow-900",
-                  );
-              } else {
-                app.showToast(
-                  "Chức năng vào phòng thi Public đang xây dựng!",
-                  "bg-blue-500",
-                );
+              // Nếu thời gian hiện tại đã vượt qua thời gian kết thúc -> Đóng cửa
+              if (now > endDate) {
+                isEnded = true;
               }
-            };
+            }
 
+            // CHECK LỊCH SỬ XEM ĐÃ NỘP BÀI/THOÁT CHƯA
+            const isFinished = localStorage.getItem(
+              `finished_contest_${contest.id}`,
+            );
+
+            // Lấy quyền Admin
+            const isAdmin =
+              app.role === "ADMIN" || localStorage.getItem("role") === "ADMIN";
+
+            let actionHtml = "";
+
+            // 1. LUẬT ADMIN: Bất tử, luôn được vào dù đã hết hạn
+            if (isAdmin) {
+              actionHtml = `<button onclick="app.enterContest(${contest.id}, '${contest.title || contest.name}', '${contest.startTime}')" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-1.5 rounded font-bold transition-colors shadow-lg text-sm whitespace-nowrap w-full">Vào (Quyền Admin)</button>`;
+            }
+            // 2. LUẬT HẾT GIỜ: Ưu tiên check hết giờ trước
+            else if (isEnded) {
+              actionHtml = `<button disabled class="bg-gray-800 text-red-500 px-4 py-1.5 rounded font-semibold text-sm cursor-not-allowed border border-gray-700 w-full whitespace-nowrap">Đã kết thúc</button>`;
+            }
+            // 3. LUẬT NỘP SỚM: Chưa hết giờ nhưng đã tự bấm thoát
+            else if (isFinished) {
+              actionHtml = `<button disabled class="bg-gray-700 text-gray-400 px-4 py-1.5 rounded font-semibold text-sm cursor-not-allowed border border-gray-600 w-full whitespace-nowrap">Đã nộp bài</button>`;
+            }
+            // 4. BÌNH THƯỜNG: Đang trong giờ thi và chưa nộp bài
+            else {
+              actionHtml = `<button onclick="app.enterContest(${contest.id}, '${contest.title || contest.name}', '${contest.startTime}')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-semibold transition-colors shadow-lg text-sm whitespace-nowrap w-full">Vào Thi</button>`;
+            }
+
+            const tr = document.createElement("tr");
+            tr.className =
+              "hover:bg-gray-700/50 transition-colors border-b border-gray-700";
+            tr.innerHTML = `
+                            <td class="p-3 text-center border-r border-gray-700/50 text-gray-400 font-medium">${contest.id}</td>
+                            <td class="p-3 border-r border-gray-700/50 text-blue-400 font-bold">${contest.title || contest.name || "Chưa có tên"}</td>
+                            <td class="p-3 text-center border-r border-gray-700/50 text-gray-300 text-sm whitespace-nowrap">${timeString}</td>
+                            <td class="p-3 text-center border-r border-gray-700/50 text-gray-400 text-sm whitespace-nowrap">${durationMins} mins</td>
+                            <td class="p-3 text-center flex justify-center">
+                                ${actionHtml}
+                            </td>
+                        `;
             tbody.appendChild(tr);
           });
         }
-      } catch (err) {
-        console.error("Error fetching contests", err);
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-red-500 font-bold">Mất kết nối với Server!</td></tr>`;
       }
     },
 
@@ -272,6 +435,250 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
+    // HÀM XEM LẠI CODE (REPLAY)
+    // HÀM XEM LẠI CODE (REPLAY) ĐÃ NÂNG CẤP BẮT LỖI
+    viewReplay: async function (subId) {
+      if (!this.token)
+        return showToast("Vui lòng đăng nhập để xem!", "bg-red-500");
+      try {
+        const res = await fetch(`/api/submissions/${subId}/source`, {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+
+        // Chuyển thành text trước để xem Server trả về cái quái gì
+        const text = await res.text();
+
+        try {
+          const data = JSON.parse(text); // Ép sang JSON
+          if (data.success) {
+            document.getElementById("replay-username").textContent =
+              data.username;
+            document.getElementById("replay-problem").textContent =
+              data.problemTitle;
+            document.getElementById("replay-code-content").value =
+              data.sourceCode;
+
+            const modal = document.getElementById("modal-replay");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+          } else {
+            showToast(data.error, "bg-yellow-500 text-yellow-900");
+          }
+        } catch (parseErr) {
+          console.error("Lỗi do Server không trả về JSON. Nội dung:", text);
+          showToast("Lỗi API! F12 để xem chi tiết.", "bg-red-500");
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Mất kết nối với Server!", "bg-red-500");
+      }
+    },
+
+    countdownTimer: null,
+
+    // 1. KIỂM TRA ĐIỀU KIỆN TRƯỚC KHI VÀO THI
+    enterContest: function (contestId, title, startTimeStr) {
+      const startTime = new Date(startTimeStr).getTime();
+      const now = new Date().getTime();
+
+      // Lấy Role của User hiện tại (Tùy theo cách bạn lưu, thường là trong localStorage hoặc biến this.role)
+      // Ở đây tôi check cả 2 cho chắc ăn:
+      const isAdmin =
+        this.role === "ADMIN" || localStorage.getItem("role") === "ADMIN";
+
+      if (now < startTime && !isAdmin) {
+        // Nếu là THÍ SINH và chưa tới giờ -> Nhốt vào phòng chờ
+        this.showContestLobby(contestId, title, startTime);
+      } else {
+        // Nếu là ADMIN (bất chấp thời gian) HOẶC đã tới giờ thi -> Cho vào luôn
+
+        if (isAdmin && now < startTime) {
+          // Hiện cái Toast ngầu ngầu báo hiệu xài đặc quyền
+          showToast(
+            "Đặc quyền Admin: Truy cập kỳ thi trước giờ mở cửa!",
+            "bg-purple-600",
+          );
+        }
+
+        this.startContest(contestId, title);
+      }
+    },
+
+    // 2. BẬT MÀN HÌNH KHÓA & ĐẾM NGƯỢC
+    showContestLobby: function (contestId, title, startTime) {
+      document.getElementById("lobby-contest-title").textContent = title;
+      const lobby = document.getElementById("contest-lobby-screen");
+      lobby.classList.remove("hidden");
+      lobby.classList.add("flex");
+
+      if (app.countdownTimer) clearInterval(app.countdownTimer); // Dùng app.
+
+      app.countdownTimer = setInterval(() => {
+        // Dùng app.
+        const distance = startTime - new Date().getTime();
+
+        if (distance <= 0) {
+          // HẾT GIỜ CHỜ -> VÀO THI TỰ ĐỘNG
+          clearInterval(app.countdownTimer); // Dùng app.
+          document.getElementById("countdown-clock").textContent = "BẮT ĐẦU!";
+          showToast("Kỳ thi đã mở! Chúc bạn làm bài tốt.", "bg-green-500");
+
+          setTimeout(() => {
+            app.exitContestLobby(); // CHỈ ĐÍCH DANH APP.
+            app.startContest(contestId, title); // CHỈ ĐÍCH DANH APP.
+          }, 1000);
+        } else {
+          const h = Math.floor(
+            (distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
+          );
+          const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+          const s = Math.floor((distance % (1000 * 60)) / 1000);
+          document.getElementById("countdown-clock").textContent =
+            `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+        }
+      }, 1000);
+    },
+
+    editSubmissionScore: async function (subId, currentScore) {
+      const newScore = prompt(
+        `[ADMIN] Nhập điểm mới cho bài nộp #${subId}:`,
+        currentScore,
+      );
+      if (newScore === null || newScore.trim() === "") return;
+
+      try {
+        const res = await fetch(`/api/admin/submissions/${subId}/score`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + this.token,
+          },
+          body: JSON.stringify({ score: parseInt(newScore) }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast("Sửa điểm thành công!", "bg-green-500");
+          this.fetchSubmissions(); // Tải lại bảng để cập nhật màu sắc
+        } else {
+          showToast(data.error || "Lỗi khi sửa điểm", "bg-red-500");
+        }
+      } catch (e) {
+        showToast("Lỗi mạng kết nối tới Server!", "bg-red-500");
+      }
+    },
+
+    // BẮT ĐẦU VÀO THI (Chế độ Lockdown)
+    startContest: async function (contestId, title) {
+      this.currentContestId = contestId;
+
+      try {
+        await fetch(`/api/contests/${contestId}/join`, {
+          method: "POST",
+          headers: { Authorization: "Bearer " + this.token },
+        });
+      } catch (e) {
+        console.error("Lỗi báo danh vào phòng thi:", e);
+      }
+
+      showToast(`Kỳ thi bắt đầu: ${title}`, "bg-green-500");
+
+      // 1. KHÓA NAVBAR: Ẩn các menu đi
+      document.querySelector("header nav").classList.add("hidden");
+
+      // 2. HIỆN NÚT THOÁT
+      document.getElementById("btn-exit-contest").classList.remove("hidden");
+
+      // 3. Đưa sang tab Danh sách bài tập (Lưu ý: ID đúng là 'problems-list-view')
+      this.switchTab("problems-list-view");
+
+      // Gọi hàm tải đề thi của Contest đó
+      this.fetchContestProblems(contestId);
+    },
+
+    // HÀM THOÁT KỲ THI (Mở khóa chức năng)
+    exitContest: function () {
+      if (
+        !confirm(
+          "CẢNH BÁO: Thoát ra bây giờ đồng nghĩa với việc NỘP BÀI SỚM. Bạn sẽ KHÔNG THỂ quay lại kỳ thi này nữa. Bạn chắc chắn chứ?",
+        )
+      )
+        return;
+
+      // 1. Đánh dấu "Đã hoàn thành" vào sổ đen LocalStorage
+      if (this.currentContestId) {
+        localStorage.setItem(
+          `finished_contest_${this.currentContestId}`,
+          "true",
+        );
+        this.currentContestId = null; // Xóa tạm nhớ
+      }
+
+      // 2. MỞ KHÓA NAVBAR & ẨN NÚT THOÁT
+      document.querySelector("header nav").classList.remove("hidden");
+      document.getElementById("btn-exit-contest").classList.add("hidden");
+
+      // 3. Đá về trang danh sách Contests
+      this.switchTab("contests-view");
+
+      // 4. Refresh lại danh sách (Lúc này nút Vào thi sẽ biến thành chữ Đã nộp bài)
+      this.fetchContests();
+      this.fetchProblems();
+
+      showToast("Đã nộp bài! Đang chờ kết quả...", "bg-blue-500");
+    },
+
+    // 5. TẢI ĐỀ THI CỦA RIÊNG CONTEST
+    // TẢI ĐỀ THI CỦA RIÊNG CONTEST
+    fetchContestProblems: async function (contestId) {
+      try {
+        const res = await fetch(`/api/contests/${contestId}/problems`, {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          return showToast("Lỗi API tải đề thi!", "bg-red-500");
+        }
+
+        if (data.success) {
+          const tbody = document.getElementById("problems-table-body");
+          tbody.innerHTML = "";
+
+          if (!data.problems || data.problems.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500 italic">Kỳ thi này chưa có bài tập nào. Hãy liên hệ Admin!</td></tr>`;
+            return;
+          }
+
+          // Vẽ danh sách bài tập chuẩn (chỉ có ID, Tên, Time, Mem, Điểm gốc)
+          data.problems.forEach((prob) => {
+            const tr = document.createElement("tr");
+            tr.className =
+              "hover:bg-gray-700/50 transition-colors cursor-pointer border-b border-gray-700";
+
+            // Fix click:
+            tr.setAttribute("onclick", `app.viewProblem(${prob.id})`);
+
+            tr.innerHTML = `
+                            <td class="p-3 text-center text-gray-400 font-medium">${prob.id}</td>
+                            <td class="p-3 text-blue-400 font-bold hover:underline">${prob.title || "Chưa có tên"}</td>
+                            <td class="p-3 text-center text-gray-300 text-sm">${prob.timeLimitMs || 1000} ms</td>
+                            <td class="p-3 text-center text-gray-300 text-sm">${prob.memoryLimitKb || 256000} KB</td>
+                            <td class="p-3 text-center text-yellow-500 font-bold">${prob.points || 100}</td>
+                        `;
+            tbody.appendChild(tr);
+          });
+        } else {
+          showToast(data.error || "Không lấy được đề thi", "bg-red-500");
+        }
+      } catch (e) {
+        showToast("Lỗi mạng khi tải đề thi!", "bg-red-500");
+      }
+    },
+
     openUserModal: function (id) {
       const u = this.adminAllUsers.find((x) => x.id === id);
       if (!u) return;
@@ -330,6 +737,99 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } catch (e) {
         tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Lỗi kết nối</td></tr>`;
+      }
+    },
+
+    // HÀM MỞ VÀ VẼ BẢNG LIVE SCOREBOARD
+    viewScoreboard: async function (contestId, title) {
+      // Lưu lại ID để dùng cho nút "Làm mới"
+      this.currentScoreboardId = contestId;
+      this.currentScoreboardTitle = title;
+
+      // Bật Modal lên
+      const modal = document.getElementById("modal-scoreboard");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+
+      document.getElementById("scoreboard-title").textContent =
+        "Scoreboard: " + title;
+      document.getElementById("scoreboard-body").innerHTML =
+        `<tr><td colspan="10" class="p-8 text-center text-yellow-500 animate-pulse text-lg">⏳ Đang tổng hợp dữ liệu...</td></tr>`;
+
+      try {
+        const res = await fetch(`/api/contests/${contestId}/scoreboard`, {
+          headers: { Authorization: "Bearer " + this.token },
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          // 1. VẼ DÒNG TIÊU ĐỀ (HEADER)
+          let headHtml = `
+                        <tr>
+                            <th class="p-3 font-bold w-16 text-center border-r border-gray-700">Top</th>
+                            <th class="p-3 font-bold w-48 text-left border-r border-gray-700">Thí sinh</th>
+                            <th class="p-3 font-bold w-24 text-center border-r border-gray-700 text-yellow-500">Tổng điểm</th>
+                    `;
+          // Thêm linh động các cột Bài 1, Bài 2...
+          data.problems.forEach((p, index) => {
+            headHtml += `<th class="p-3 font-bold text-center border-r border-gray-700 hover:text-blue-400 cursor-pointer" title="${p.title}">Bài ${index + 1}</th>`;
+          });
+          headHtml += `</tr>`;
+          document.getElementById("scoreboard-head").innerHTML = headHtml;
+
+          // 2. VẼ DANH SÁCH THÍ SINH
+          let bodyHtml = "";
+          if (data.scoreboard.length === 0) {
+            bodyHtml = `<tr><td colspan="10" class="p-8 text-center text-gray-500 italic">Chưa có thí sinh nào nộp bài hợp lệ trong kỳ thi này.</td></tr>`;
+          } else {
+            data.scoreboard.forEach((user, idx) => {
+              // Top 1, 2, 3 có màu mạ vàng mạ bạc cho xịn
+              let rankColor = "text-gray-400";
+              if (idx === 0)
+                rankColor =
+                  "text-yellow-400 text-lg drop-shadow-[0_0_5px_rgba(250,204,21,0.8)]";
+              else if (idx === 1) rankColor = "text-gray-300 text-lg";
+              else if (idx === 2) rankColor = "text-amber-600 text-lg";
+
+              let row = `<tr class="border-b border-gray-800 hover:bg-gray-800 transition-colors">
+                                <td class="p-3 text-center font-bold border-r border-gray-800 ${rankColor}">${idx + 1}</td>
+                                <td class="p-3 text-blue-400 font-semibold border-r border-gray-800">
+                                    <div class="flex items-center">
+                                        <svg class="w-4 h-4 mr-2 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>
+                                        ${user.username}
+                                    </div>
+                                </td>
+                                <td class="p-3 text-center text-yellow-500 font-bold border-r border-gray-800 text-base">${user.total}</td>
+                            `;
+
+              // In điểm của từng bài
+              data.problems.forEach((p) => {
+                const pScore = user.details[p.id];
+                if (pScore !== undefined) {
+                  const color =
+                    pScore == 100
+                      ? "text-green-500"
+                      : pScore > 0
+                        ? "text-yellow-500"
+                        : "text-red-500";
+                  row += `<td class="p-3 text-center font-bold border-r border-gray-800 ${color}">${pScore}</td>`;
+                } else {
+                  row += `<td class="p-3 text-center text-gray-600 border-r border-gray-800">-</td>`; // Chưa làm
+                }
+              });
+
+              row += `</tr>`;
+              bodyHtml += row;
+            });
+          }
+          document.getElementById("scoreboard-body").innerHTML = bodyHtml;
+        } else {
+          document.getElementById("scoreboard-body").innerHTML =
+            `<tr><td colspan="10" class="p-8 text-center text-red-500 font-bold">${data.error}</td></tr>`;
+        }
+      } catch (e) {
+        document.getElementById("scoreboard-body").innerHTML =
+          `<tr><td colspan="10" class="p-8 text-center text-red-500 font-bold">Lỗi kết nối tới Server!</td></tr>`;
       }
     },
 
@@ -417,24 +917,65 @@ document.addEventListener("DOMContentLoaded", () => {
               ? sub.user.username
               : `User #${sub.userId}`;
             const shortStatus = sub.status.split(" ")[0];
+            const score =
+              sub.score !== undefined
+                ? sub.score
+                : sub.status.includes("AC")
+                  ? 100
+                  : 0;
+            const scoreColor =
+              score === 100
+                ? "text-green-500"
+                : score > 0
+                  ? "text-yellow-500"
+                  : "text-red-500";
+            // 1. Kiểm tra Admin để tạo nút sửa điểm
+            const isAdmin =
+              app.role === "ADMIN" || localStorage.getItem("role") === "ADMIN";
 
+            let editBtn = "";
+            if (isAdmin) {
+              editBtn = `<button onclick="app.editSubmissionScore(${sub.id}, ${score})" class="ml-2 text-[10px] text-blue-400 hover:text-white bg-blue-900/40 hover:bg-blue-600 px-1.5 py-0.5 rounded transition-colors" title="Sửa điểm thủ công">✏️</button>`;
+            }
+
+            // 2. Nối chuỗi HTML (ĐÚNG 6 CỘT, KHÔNG THỪA KHÔNG THIẾU)
             tr.innerHTML = `
-                            <td class="p-3 text-center align-middle">
-                                <div class="inline-block w-full px-2 py-1.5 rounded border text-xs font-bold ${statusColor}" title="${sub.status}">
-                                    ${shortStatus}
-                                </div>
-                            </td>
-                            <td class="p-3">
-                                <div class="font-semibold text-blue-400 hover:text-blue-300 cursor-pointer transition-colors">${probTitle}</div>
-                                <div class="text-xs text-gray-500 mt-1 flex items-center">
-                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>
-                                    ${username}
-                                </div>
-                            </td>
-                            <td class="p-3 text-center text-gray-300 font-mono text-xs">${timeStr}</td>
-                            <td class="p-3 text-center text-gray-300 font-mono text-xs">${memStr}</td>
-                            <td class="p-3 text-center text-gray-400 text-xs uppercase">${sub.language}</td>
-                        `;
+                <!-- Cột 1: STATUS -->
+                <td class="p-3 text-center align-middle">
+                    <div class="inline-block w-full px-2 py-1.5 rounded border text-xs font-bold ${statusColor}" title="${sub.status}">
+                        ${shortStatus}
+                    </div>
+                </td>
+                
+                <!-- Cột 2: SCORE (CỘT ĐIỂM DUY NHẤT) -->
+                <td class="p-3 text-center align-middle font-bold text-base ${scoreColor}">
+                    ${score} ${editBtn}
+                </td>
+                
+                <!-- Cột 3: PROBLEM / USER -->
+                <td class="p-3">
+                    <div class="font-semibold text-blue-400 hover:text-blue-300 cursor-pointer transition-colors" onclick="app.viewProblem(${sub.problemId})">${probTitle}</div>
+                    <div class="text-xs text-gray-500 mt-1 flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>
+                        ${username}
+                    </div>
+                </td>
+                
+                <!-- Cột 4: TIME -->
+                <td class="p-3 text-center text-gray-300 font-mono text-xs whitespace-nowrap align-middle">${timeStr}</td>
+                
+                <!-- Cột 5: MEMORY -->
+                <td class="p-3 text-center text-gray-300 font-mono text-xs whitespace-nowrap align-middle">${memStr}</td>
+                
+                <!-- Cột 6: LANGUAGE & ACTION -->
+                <td class="p-3 text-center flex flex-col items-center justify-center whitespace-nowrap">
+                    <span class="text-gray-400 text-xs uppercase font-semibold">${sub.language}</span>
+                    <button onclick="app.viewReplay(${sub.id})" class="mt-1.5 text-blue-400 hover:text-white flex items-center text-[10px] bg-blue-900/30 hover:bg-blue-600 px-2 py-1 rounded border border-blue-800 transition-colors cursor-pointer shadow-sm">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        Xem Code
+                    </button>
+                </td>
+            `;
             tbody.appendChild(tr);
           });
         }
@@ -513,37 +1054,46 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     // HÀM LOAD BẢNG CONTEST ADMIN
+    // HÀM CHO ADMIN: LẤY VÀ QUẢN LÝ KỲ THI
     fetchAdminContests: async function () {
-      if (this.role !== "ADMIN") return;
       try {
-        const res = await fetch("/api/admin/contests", {
+        const res = await fetch("/api/contests", {
           headers: { Authorization: "Bearer " + this.token },
         });
         const data = await res.json();
+
         if (data.success) {
-          this.adminAllContests = data.contests;
           const tbody = document.getElementById("admin-contests-list");
           tbody.innerHTML = "";
-          data.contests.forEach((c) => {
-            // Cắt lấy giờ/ngày cho gọn
-            const start = new Date(c.startTime).toLocaleString("vi-VN", {
-              hour: "2-digit",
-              minute: "2-digit",
-              day: "2-digit",
-              month: "2-digit",
-            });
-            const pwdIcon = c.password ? "🔒" : "🔓";
 
+          if (data.contests.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Chưa có kỳ thi nào.</td></tr>`;
+            return;
+          }
+
+          data.contests.forEach((contest) => {
+            const startDate = new Date(contest.startTime).toLocaleString(
+              "vi-VN",
+            );
             const tr = document.createElement("tr");
             tr.className =
               "hover:bg-gray-700/50 transition-colors border-b border-gray-700";
+
             tr.innerHTML = `
-                            <td class="p-3 text-center text-gray-400">${c.id}</td>
-                            <td class="p-3 text-purple-400 font-semibold">${pwdIcon} ${c.title}</td>
-                            <td class="p-3 text-center text-xs text-gray-400">${start}</td>
+                            <td class="p-3 text-center text-gray-400">${contest.id}</td>
+                            <td class="p-3 text-blue-400 font-semibold">${contest.title || contest.name}</td>
+                            <td class="p-3 text-center text-gray-300 text-sm">${startDate}</td>
                             <td class="p-3 flex justify-center space-x-2">
-                                <button onclick="app.openContestModal(${c.id})" class="px-2 py-1 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600 hover:text-white rounded text-xs border border-yellow-700 transition">Sửa</button>
-                                <button onclick="app.deleteContest(${c.id})" class="px-2 py-1 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded text-xs border border-red-700 transition">Xóa</button>
+                                <!-- NÚT XEM ĐIỂM (MỞ LẠI MODAL SCOREBOARD ICPC ĐÃ TẠO LÚC TRƯỚC) -->
+                                <button onclick="app.viewScoreboard(${contest.id}, '${contest.title || contest.name}')" class="px-2 py-1 bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white rounded text-xs border border-green-700 transition">
+                                    Xem Điểm
+                                </button>
+                                <button onclick="app.openEditContest(${contest.id})" class="px-2 py-1 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600 hover:text-white rounded text-xs border border-yellow-700 transition">
+                                    Sửa
+                                </button>
+                                <button onclick="app.deleteContest(${contest.id})" class="px-2 py-1 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded text-xs border border-red-700 transition">
+                                    Xóa
+                                </button>
                             </td>
                         `;
             tbody.appendChild(tr);
@@ -1384,6 +1934,17 @@ document.addEventListener("DOMContentLoaded", () => {
       };
       reader.readAsText(file);
     });
+
+  // Chức năng Copy Code trong màn hình Replay
+  document.getElementById("btn-copy-code")?.addEventListener("click", () => {
+    const code = document.getElementById("replay-code-content").value;
+    navigator.clipboard
+      .writeText(code)
+      .then(() => {
+        showToast("Đã copy thành công!", "bg-green-500");
+      })
+      .catch(() => showToast("Lỗi copy!", "bg-red-500"));
+  });
 
   // === 7. KHỞI TẠO DỮ LIỆU BAN ĐẦU ===
   app.updateNavAuth();

@@ -8,7 +8,6 @@ import os from "os";
 import path from "path";
 import { PrismaClient } from "@prisma/client";
 import cors from "cors";
-
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
@@ -106,7 +105,11 @@ const authenticateToken = (req: any, res: any, next: any) => {
   if (token == null) return res.sendStatus(401);
 
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) return res.sendStatus(403);
+    if (err)
+      return res.status(403).json({
+        error:
+          "Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại!",
+      });
     req.user = user;
     next();
   });
@@ -174,6 +177,34 @@ app.get(
   },
 );
 
+app.post(
+  "/api/admin/users/single",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const { username, password, role } = req.body;
+      if (!username) return res.status(400).json({ error: "Thiếu Username" });
+
+      const exist = await prisma.user.findUnique({ where: { username } });
+      if (exist) return res.status(400).json({ error: "Username đã tồn tại" });
+
+      const hash = await bcrypt.hash(password || "123456", 10);
+      await prisma.user.create({
+        data: {
+          username,
+          passwordHash: hash,
+          role: role || "CONTESTANT",
+          rating: 1500,
+        },
+      });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Lỗi thêm user" });
+    }
+  },
+);
+
 // SỬA BÀI TẬP (Cập nhật)
 app.put(
   "/api/problems/:id",
@@ -232,6 +263,35 @@ app.get(
       res.json({ success: true, contests });
     } catch (error) {
       res.status(500).json({ error: "Lỗi fetch contests" });
+    }
+  },
+);
+
+// [API ADMIN] SỬA ĐIỂM BÀI NỘP THỦ CÔNG
+app.put(
+  "/api/admin/submissions/:id/score",
+  authenticateToken,
+  async (req: any, res: any) => {
+    try {
+      // Tự check quyền Admin ở đây cho an toàn, khỏi sợ thiếu Middleware
+      if (req.user.role !== "ADMIN") {
+        return res
+          .status(403)
+          .json({ error: "Chỉ Admin mới có quyền sửa điểm!" });
+      }
+
+      const subId = parseInt(req.params.id);
+      const newScore = parseInt(req.body.score);
+
+      await prisma.submission.update({
+        where: { id: subId },
+        data: { score: newScore },
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Lỗi API sửa điểm:", error);
+      res.status(500).json({ error: "Lỗi hệ thống khi cập nhật điểm" });
     }
   },
 );
@@ -462,6 +522,59 @@ app.delete(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Lỗi xóa user" });
+    }
+  },
+);
+
+// LẤY SOURCE CODE CỦA BÀI NỘP (REPLAY)
+app.get(
+  "/api/submissions/:id/source",
+  authenticateToken,
+  async (req: any, res: any) => {
+    try {
+      const subId = parseInt(req.params.id);
+      const submission = await prisma.submission.findUnique({
+        where: { id: subId },
+        include: { user: true, problem: true },
+      });
+
+      if (!submission)
+        return res.status(404).json({ error: "Không tìm thấy bài nộp" });
+
+      // 1. Mặc định: Admin hoặc chính chủ nộp thì được xem luôn
+      let canView =
+        req.user.role === "ADMIN" || submission.userId === req.user.userId;
+
+      // 2. Nếu là người khác xem: Phải kiểm tra xem người xem đã AC bài này chưa
+      if (!canView) {
+        const hasAC = await prisma.submission.findFirst({
+          where: {
+            userId: req.user.userId,
+            problemId: submission.problemId,
+            status: { contains: "AC" }, // Chứa chữ AC (Accepted)
+          },
+        });
+        if (hasAC) canView = true;
+      }
+
+      if (!canView) {
+        return res.status(403).json({
+          error:
+            "Gian lận hả? Bạn phải giải đúng (AC) bài này mới được xem code của người khác!",
+        });
+      }
+
+      res.json({
+        success: true,
+        sourceCode:
+          (submission as any).sourceCode ||
+          (submission as any).code ||
+          "Không có nội dung code",
+        username: submission.user?.username || "Unknown",
+        problemTitle: submission.problem?.title || "Unknown",
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi máy chủ" });
     }
   },
 );
@@ -1201,6 +1314,121 @@ app.get("/problems", async (_req, res) => {
   }
 });
 
+// [API] LẤY LIVE SCOREBOARD CỦA KỲ THI (ĐÃ CẬP NHẬT TÍNH NĂNG QUẸT THẺ)
+app.get("/api/contests/:id/scoreboard", async (req: any, res: any) => {
+  try {
+    const contestId = parseInt(req.params.id);
+
+    // 1. Lấy thông tin kỳ thi và danh sách bài tập
+    const contest = await prisma.contest.findUnique({
+      where: { id: contestId },
+      include: { problems: true },
+    });
+
+    if (!contest) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Không tìm thấy kỳ thi!" });
+    }
+
+    const actualProblems = contest.problems;
+    const problemIds = actualProblems.map((p: any) => p.id);
+
+    console.log(`\n--- DÒ LỖI SCOREBOARD CHO CONTEST #${contestId} ---`);
+    console.log("👉 1. Danh sách ID bài tập trong kỳ thi:", problemIds);
+
+    if (problemIds.length === 0) {
+      console.log("❌ LỖI: Kỳ thi này chưa được gắn bài tập nào trong DB!");
+      return res.json({ success: true, problems: [], scoreboard: [] });
+    }
+
+    // 2. Lấy toàn bộ bài nộp của các ID bài tập trên
+    const submissions = await prisma.submission.findMany({
+      where: {
+        problemId: { in: problemIds },
+      },
+      include: { user: true },
+    });
+
+    console.log(
+      `👉 2. Tìm thấy ${submissions.length} bài nộp cho các bài tập này trong DB.`,
+    );
+
+    // 3. Lấy danh sách những người "đã quẹt thẻ" (Participant) vào phòng thi
+    const participants = await prisma.contestParticipant.findMany({
+      where: { contestId: contestId },
+      include: { user: true },
+    });
+
+    // 4. Gom nhóm và tính điểm
+    const userScores: any = {};
+
+    // 👉 Bước 4.1: TẠO SẴN GHẾ NGỒI VỚI ĐIỂM 0 CHO TẤT CẢ NHỮNG AI ĐÃ VÀO PHÒNG
+    participants.forEach((p: any) => {
+      const uid = p.userId;
+      userScores[uid] = {
+        username: p.user?.username || `User_${uid}`,
+        total: 0,
+        details: {},
+      };
+    });
+
+    // 👉 Bước 4.2: TRỘN ĐIỂM TỪ CÁC BÀI NỘP VÀO
+    submissions.forEach((sub: any) => {
+      const uid = sub.userId;
+
+      // Lỡ có Admin/User nộp bài test từ ngoài mà chưa bấm nút "Vào thi" thì tự động thêm ghế
+      if (!userScores[uid]) {
+        userScores[uid] = {
+          username: sub.user?.username || `User_${uid}`,
+          total: 0,
+          details: {},
+        };
+      }
+
+      const pid = sub.problemId;
+      // Xử lý điểm an toàn
+      const score =
+        sub.score !== null && sub.score !== undefined
+          ? sub.score
+          : sub.status.includes("AC")
+            ? 100
+            : 0;
+
+      // Lấy điểm cao nhất của bài tập đó
+      if (
+        userScores[uid].details[pid] === undefined ||
+        score > userScores[uid].details[pid]
+      ) {
+        userScores[uid].details[pid] = score;
+      }
+    });
+
+    // 5. Tính tổng điểm và Sắp xếp Rank (Từ cao xuống thấp)
+    const scoreboard = Object.values(userScores).map((u: any) => {
+      u.total = Object.values(u.details).reduce(
+        (sum: any, s: any) => sum + s,
+        0,
+      );
+      return u;
+    });
+
+    scoreboard.sort((a: any, b: any) => b.total - a.total);
+
+    console.log(
+      `👉 3. Đã xếp hạng xong cho ${scoreboard.length} thí sinh hợp lệ.`,
+    );
+    console.log("-------------------------------------------\n");
+
+    res.json({ success: true, problems: actualProblems, scoreboard });
+  } catch (error) {
+    console.error("Lỗi API Scoreboard:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Lỗi hệ thống khi tải Bảng xếp hạng!" });
+  }
+});
+
 // Maximum allowed source code size (64 KiB)
 const MAX_CODE_BYTES = 64 * 1024;
 
@@ -1279,6 +1507,35 @@ app.post("/api/submit", async (req, res) => {
       where: { id: submissionRecord.id },
       data: { status: "Running" },
     });
+
+    // [API] LẤY CHI TIẾT MỘT BÀI TẬP ĐỂ HIỂN THỊ LÚC LÀM BÀI
+    app.get(
+      "/api/problems/:id",
+      authenticateToken,
+      async (req: any, res: any) => {
+        try {
+          const problemId = parseInt(req.params.id);
+
+          const problem = await prisma.problem.findUnique({
+            where: { id: problemId },
+          });
+
+          if (!problem) {
+            return res.status(404).json({
+              success: false,
+              error: "Không tìm thấy đề bài này trong CSDL!",
+            });
+          }
+
+          res.json({ success: true, problem });
+        } catch (error) {
+          console.error("Lỗi lấy chi tiết bài tập:", error);
+          res
+            .status(500)
+            .json({ success: false, error: "Lỗi hệ thống khi tải đề bài" });
+        }
+      },
+    );
 
     const candidates = [
       path.join(process.cwd(), "problem", String(problemId), "testcases"),
@@ -1360,6 +1617,63 @@ app.post("/api/submit", async (req, res) => {
           }
         });
 
+        // [API] THÍ SINH QUẸT THẺ GHI DANH VÀO PHÒNG THI
+        app.post(
+          "/api/contests/:id/join",
+          authenticateToken,
+          async (req: any, res: any) => {
+            try {
+              const contestId = parseInt(req.params.id);
+              const userId = req.user.userId || req.user.id; // Lấy ID của người đang đăng nhập
+
+              // Kiểm tra xem đã ghi danh trước đó chưa
+              const existing = await prisma.contestParticipant.findFirst({
+                where: { contestId, userId },
+              });
+
+              // Nếu chưa thì ghi tên vào sổ
+              if (!existing) {
+                await prisma.contestParticipant.create({
+                  data: { contestId, userId },
+                });
+              }
+              res.json({ success: true });
+            } catch (error) {
+              console.error("Lỗi Join Contest:", error);
+              res.status(500).json({ error: "Lỗi hệ thống khi ghi danh" });
+            }
+          },
+        );
+
+        // [API] LẤY CHI TIẾT MỘT BÀI TẬP ĐỂ HIỂN THỊ LÚC LÀM BÀI
+        app.get(
+          "/api/problems/:id",
+          authenticateToken,
+          async (req: any, res: any) => {
+            try {
+              const problemId = parseInt(req.params.id);
+
+              const problem = await prisma.problem.findUnique({
+                where: { id: problemId },
+              });
+
+              if (!problem) {
+                return res.status(404).json({
+                  success: false,
+                  error: "Không tìm thấy đề bài này trong CSDL!",
+                });
+              }
+
+              res.json({ success: true, problem });
+            } catch (error) {
+              console.error("Lỗi lấy chi tiết bài tập:", error);
+              res
+                .status(500)
+                .json({ success: false, error: "Lỗi hệ thống khi tải đề bài" });
+            }
+          },
+        );
+
         if (run.stdin) {
           run.stdin.write(inputData);
           run.stdin.end();
@@ -1403,6 +1717,56 @@ app.post("/api/submit", async (req, res) => {
   })(); // Hàm nặc danh chạy ngầm
 });
 
+// [API] LẤY DANH SÁCH BÀI TẬP CỦA MỘT KỲ THI
+app.get(
+  "/api/contests/:id/problems",
+  authenticateToken,
+  async (req: any, res: any) => {
+    try {
+      const contestId = parseInt(req.params.id);
+      const contest = await prisma.contest.findUnique({
+        where: { id: contestId },
+        include: { problems: true }, // Phải có dòng này Prisma mới lôi bài tập ra
+      });
+
+      if (!contest)
+        return res.status(404).json({ error: "Không tìm thấy kỳ thi" });
+
+      res.json({ success: true, problems: contest.problems });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Lỗi Server khi tải đề thi" });
+    }
+  },
+);
+// [API ADMIN] XÓA BÀI TẬP
+app.delete(
+  "/api/admin/problems/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const id = parseInt(req.params.id);
+
+      await prisma.problem.delete({ where: { id } });
+
+      const folderPath = path.join(process.cwd(), "problem", id.toString());
+
+      try {
+        await fs.rm(folderPath, { recursive: true, force: true } as any);
+        console.log(`Đã bay màu folder: ${folderPath}`);
+      } catch (fsError) {
+        console.error("Lỗi xóa file local:", fsError);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Lỗi khi xóa bài tập" });
+    }
+  },
+);
+
 // Lấy danh sách Contests
 app.get("/api/contests", async (_req, res) => {
   try {
@@ -1425,6 +1789,65 @@ app.get("/api/contests", async (_req, res) => {
   } catch (error) {
     console.error("Error fetching contests:", error);
     res.status(500).json({ error: "Failed to fetch contests" });
+  }
+});
+
+// [API] LẤY DANH SÁCH TẤT CẢ KỲ THI (Hiển thị ở tab CONTESTS)
+app.get("/api/contests", async (req: any, res: any) => {
+  try {
+    const contests = await prisma.contest.findMany({
+      orderBy: { startTime: "desc" }, // Xếp kỳ thi mới nhất lên đầu
+    });
+    res.json({ success: true, contests });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Lỗi khi lấy danh sách kỳ thi" });
+  }
+});
+
+// 1. [API] THÍ SINH QUẸT THẺ GHI DANH VÀO PHÒNG THI
+app.post(
+  "/api/contests/:id/join",
+  authenticateToken,
+  async (req: any, res: any) => {
+    try {
+      const contestId = parseInt(req.params.id);
+      const userId = req.user.userId || req.user.id;
+
+      const existing = await prisma.contestParticipant.findFirst({
+        where: { contestId, userId },
+      });
+
+      if (!existing) {
+        await prisma.contestParticipant.create({
+          data: { contestId, userId },
+        });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Lỗi Join Contest:", error);
+      res.status(500).json({ error: "Lỗi hệ thống khi ghi danh" });
+    }
+  },
+);
+
+// 2. [API] LẤY CHI TIẾT MỘT BÀI TẬP ĐỂ HIỂN THỊ LÚC LÀM BÀI
+app.get("/api/problems/:id", authenticateToken, async (req: any, res: any) => {
+  try {
+    const problemId = parseInt(req.params.id);
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId },
+    });
+
+    if (!problem) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Không tìm thấy đề bài!" });
+    }
+    res.json({ success: true, problem });
+  } catch (error) {
+    console.error("Lỗi lấy chi tiết bài tập:", error);
+    res.status(500).json({ success: false, error: "Lỗi hệ thống tải đề bài" });
   }
 });
 

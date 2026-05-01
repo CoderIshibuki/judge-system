@@ -14,6 +14,7 @@ model User {
   role         String       @default("CONTESTANT")  
   rating       Int          @default(1500)
   submissions  Submission[]
+  contestParticipations ContestParticipant[]
 }
 
 model Problem {
@@ -47,6 +48,7 @@ model Submission {
   status          String   @default("Pending") // AC, WA, TLE, MLE, CE...
   time            Float?
   memory          Int?
+  score           Int?     @default(0)
   compileOutput   String?
   createdAt       DateTime @default(now())
   details         String?
@@ -64,4 +66,17 @@ model Contest {
   
   problems    Problem[] @relation("ContestProblems") 
   createdAt   DateTime  @default(now())
+  participants  ContestParticipant[]
+}
+
+model ContestParticipant {
+  id        Int      @id @default(autoincrement())
+  contestId Int
+  userId    Int
+  joinedAt  DateTime @default(now())
+
+  contest   Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId]) 
 }
