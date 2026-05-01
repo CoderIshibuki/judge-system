@@ -109,7 +109,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // HÀM MỞ GIAO DIỆN LÀM BÀI (PHIÊN BẢN MÁY QUÉT X-QUANG)
     viewProblem: async function (id) {
       try {
         this.switchTab("editor-view");
@@ -118,21 +117,22 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("active-problem-desc").innerHTML =
           "Vui lòng đợi trong giây lát...";
 
-        console.log("👉 Đang gọi API lấy đề bài ID:", id); // Test xem ID có bị undefined không
+        console.log("👉 Đang gọi API lấy đề bài ID:", id);
 
         const res = await fetch(`/api/problems/${id}`, {
           headers: { Authorization: "Bearer " + this.token },
         });
 
-        // DÙNG X-QUANG: Đọc nguyên bản câu trả lời của Server trước khi ép sang JSON
+        // 1. Lấy dữ liệu thô dưới dạng text trước (Quan trọng!)
         const text = await res.text();
         console.log("👉 Server trả về nguyên bản:", text);
 
+        // 2. Thử giải mã JSON từ text đó
         let data;
         try {
           data = JSON.parse(text);
         } catch (err) {
-          // Nếu Server trả về HTML lỗi 404/500, in thẳng lên màn hình làm bài luôn!
+          // Nếu server trả về lỗi HTML (404/500), hiện thẳng lên khung đề bài
           document.getElementById("active-problem-title").textContent =
             "Lỗi Server 💥";
           document.getElementById("active-problem-desc").innerHTML =
@@ -151,7 +151,9 @@ document.addEventListener("DOMContentLoaded", () => {
             `Time: ${prob.timeLimitMs}ms | Mem: ${prob.memoryLimitKb}KB`;
           document.getElementById("active-problem-desc").innerHTML =
             prob.description || "Không có mô tả chi tiết.";
-          this.currentProblemId = prob.id;
+
+          // 👉 CỐ ĐỊNH BƯỚC 1: Lưu ID vào biến toàn cục để nút Submit nhận diện được bài
+          app.currentProblemId = data.problem.id;
         } else {
           showToast(data.error || "Không tìm thấy đề bài!", "bg-red-500");
           this.switchTab("problems-list-view");
@@ -359,7 +361,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     openProblem: function (problem) {
       // Cập nhật ID bài đang làm
-      selectedProblemId = problem.id;
+      app.currentProblemId = problem.id;
 
       // Đổ nội dung đề bài vào Sidebar
       document.getElementById("active-problem-title").textContent =
@@ -435,8 +437,70 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
+    submitCode: async function () {
+      // Kiểm tra xem đã chọn bài chưa
+      if (!app.currentProblemId) {
+        showToast("Vui lòng chọn một bài tập trước khi nộp!", "bg-yellow-500");
+        return;
+      }
+
+      // Lấy code từ editor toàn cục (window.editor an toàn hơn)
+      const code = window.editor.getValue();
+
+      const langElement = document.getElementById("language-select");
+      if (!langElement) {
+        console.error(
+          "❌ Không tìm thấy phần tử 'language-select' trên giao diện!",
+        );
+        showToast("Lỗi: Thiếu ô chọn ngôn ngữ!", "bg-red-500");
+        return;
+      }
+
+      const lang = langElement.value;
+
+      try {
+        const res = await fetch("/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + this.token,
+          },
+          body: JSON.stringify({
+            problemId: app.currentProblemId,
+            sourceCode: code,
+            language: lang,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showToast("Đã nộp bài thành công!", "bg-green-500");
+
+          // FIX LỖI SỐ 2: Lưu lại ID bài nộp để Socket biết mà hiển thị kết quả
+          // Dựa vào log Network của ông, server trả về trường 'submissionId'
+          activeSubmissionId = data.submissionId;
+
+          // FIX LỖI SỐ 1: Gọi đúng ID 'result-output' trong index.html
+          const resultPanel = document.getElementById("result-output");
+          if (resultPanel) {
+            resultPanel.innerHTML =
+              '<div class="p-4 text-yellow-500 animate-pulse">⏳ Đang chấm bài...</div>';
+          }
+
+          this.fetchSubmissions();
+        } else {
+          showToast(
+            data.message || data.error || "Server từ chối bài nộp!",
+            "bg-red-500",
+          );
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Lỗi mạng khi nộp bài!", "bg-red-500");
+      }
+    },
+
     // HÀM XEM LẠI CODE (REPLAY)
-    // HÀM XEM LẠI CODE (REPLAY) ĐÃ NÂNG CẤP BẮT LỖI
     viewReplay: async function (subId) {
       if (!this.token)
         return showToast("Vui lòng đăng nhập để xem!", "bg-red-500");
@@ -1267,83 +1331,85 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   });
 
-  submitBtn.addEventListener("click", () => {
-    if (!window.editor)
-      return showToast("Editor is still loading...", "bg-red-500");
-    const sourceCode = window.editor.getValue();
-    const language = languageSelect.value;
+  // submitBtn.addEventListener("click", () => {
+  //   if (!window.editor)
+  //     return showToast("Editor is still loading...", "bg-red-500");
+  //   const sourceCode = window.editor.getValue();
+  //   const language = (
+  //     document.getElementById("language-select") || { value: "cpp" }
+  //   ).value;
 
-    if (!selectedProblemId)
-      return showToast(
-        "Please select a problem first.",
-        "bg-yellow-500 text-yellow-900",
-      );
-    if (!sourceCode.trim())
-      return showToast(
-        "Please write some code.",
-        "bg-yellow-500 text-yellow-900",
-      );
+  //   if (!selectedProblemId)
+  //     return showToast(
+  //       "Please select a problem first.",
+  //       "bg-yellow-500 text-yellow-900",
+  //     );
+  //   if (!sourceCode.trim())
+  //     return showToast(
+  //       "Please write some code.",
+  //       "bg-yellow-500 text-yellow-900",
+  //     );
 
-    // Bắt buộc đăng nhập mới được nộp bài
-    if (!app.token) {
-      showToast("You must login to submit code!", "bg-red-500");
-      return app.switchTab("auth-view");
-    }
+  //   // Bắt buộc đăng nhập mới được nộp bài
+  //   if (!app.token) {
+  //     showToast("You must login to submit code!", "bg-red-500");
+  //     return app.switchTab("auth-view");
+  //   }
 
-    submitBtn.disabled = true;
-    submitBtn.classList.add("opacity-50", "cursor-not-allowed");
-    submitBtn.textContent = "Submitting...";
+  //   submitBtn.disabled = true;
+  //   submitBtn.classList.add("opacity-50", "cursor-not-allowed");
+  //   submitBtn.textContent = "Submitting...";
 
-    // Lấy User ID từ token để gắn vào request (tạm dùng decode, ở thực tế nên lấy trên server)
-    const payload = JSON.parse(atob(app.token.split(".")[1]));
-    const userId = payload.userId;
+  //   // Lấy User ID từ token để gắn vào request (tạm dùng decode, ở thực tế nên lấy trên server)
+  //   const payload = JSON.parse(atob(app.token.split(".")[1]));
+  //   const userId = payload.userId;
 
-    fetch("/api/submit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + app.token,
-      },
-      body: JSON.stringify({
-        sourceCode,
-        problemId: selectedProblemId,
-        language: language,
-        userId: userId,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        submitBtn.disabled = false;
-        submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
-        submitBtn.textContent = "Submit";
+  //   fetch("/api/submit", {
+  //     method: "POST",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //       Authorization: "Bearer " + app.token,
+  //     },
+  //     body: JSON.stringify({
+  //       sourceCode,
+  //       problemId: selectedProblemId,
+  //       language: language,
+  //       userId: userId,
+  //     }),
+  //   })
+  //     .then((res) => res.json())
+  //     .then((data) => {
+  //       submitBtn.disabled = false;
+  //       submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
+  //       submitBtn.textContent = "Submit";
 
-        if (data.status || data.success) {
-          activeSubmissionId = data.submission_id || data.submissionId;
-          resultOutput.innerHTML = `
-                    <div class="animate-pulse flex space-x-3 items-center text-blue-400">
-                        <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Submission sent. Waiting...</span>
-                    </div>
-                `;
-          app.fetchSubmissions(); // Cập nhật lại bảng Submission ngay lập tức
-        } else {
-          showToast(
-            data.error || "Submission failed.",
-            "bg-red-500 text-white",
-          );
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-        submitBtn.disabled = false;
-        submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
-        submitBtn.textContent = "Submit";
-        showToast("Network error.", "bg-red-500 text-white");
-      });
-  });
+  //       if (data.status || data.success) {
+  //         activeSubmissionId = data.submission_id || data.submissionId;
+  //         resultOutput.innerHTML = `
+  //                   <div class="animate-pulse flex space-x-3 items-center text-blue-400">
+  //                       <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+  //                           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+  //                           <path class="opacity-75" fill="currentColor" d="M4 12 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  //                       </svg>
+  //                       <span>Submission sent. Waiting...</span>
+  //                   </div>
+  //               `;
+  //         app.fetchSubmissions(); // Cập nhật lại bảng Submission ngay lập tức
+  //       } else {
+  //         showToast(
+  //           data.error || "Submission failed.",
+  //           "bg-red-500 text-white",
+  //         );
+  //       }
+  //     })
+  //     .catch((err) => {
+  //       console.error(err);
+  //       submitBtn.disabled = false;
+  //       submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
+  //       submitBtn.textContent = "Submit";
+  //       showToast("Network error.", "bg-red-500 text-white");
+  //     });
+  // });
 
   // === 5. CÁC HÀM TIỆN ÍCH (HELPER) ===
   function updateResultPanel(submission) {
@@ -1492,11 +1558,9 @@ document.addEventListener("DOMContentLoaded", () => {
     connStatus.className = "text-red-500";
   });
   socket.on("submission_update", (submission) => {
-    // Cập nhật bảng kết quả cá nhân
     if (activeSubmissionId === submission.id) {
       updateResultPanel(submission);
     }
-    // Cập nhật bảng All Submissions chung
     if (typeof app.fetchSubmissions === "function") {
       app.fetchSubmissions();
     }
