@@ -19,6 +19,15 @@ const io = new Server(httpServer, {
   },
 });
 
+io.on("connection", (socket) => {
+  socket.on("camera_frame", (data) => {
+    // data should contain { contestId, userId, username, frame }
+    // Broadcast to admins
+    io.emit("admin_camera_frame", data);
+  });
+});
+
+
 const prisma = new PrismaClient().$extends({
   query: {
     submission: {
@@ -256,7 +265,7 @@ app.put(
   isAdmin,
   async (req: any, res: any) => {
     try {
-      const { title, description, startTime, endTime, password, problemIds } =
+      const { title, description, startTime, endTime, password, problemIds, requireCamera } =
         req.body;
       const connectProblems = problemIds
         ? problemIds.map((id: number) => ({ id: Number(id) }))
@@ -270,6 +279,7 @@ app.put(
           startTime: new Date(startTime),
           endTime: new Date(endTime),
           password,
+          requireCamera: requireCamera !== undefined ? !!requireCamera : undefined,
           problems: { set: connectProblems }, // Set lại danh sách bài tập mới
         },
       });
@@ -637,7 +647,7 @@ app.post(
   isAdmin,
   async (req: any, res: any) => {
     try {
-      const { title, description, startTime, endTime, password, problemIds } =
+      const { title, description, startTime, endTime, password, problemIds, requireCamera } =
         req.body;
 
       if (!title || !startTime || !endTime) {
@@ -657,6 +667,7 @@ app.post(
           startTime: new Date(startTime),
           endTime: new Date(endTime),
           password: password || null,
+          requireCamera: !!requireCamera,
           problems: { connect: connectProblems },
         },
       });
@@ -737,8 +748,8 @@ app.get("/api/submissions", async (_req, res) => {
       take: 50,
       orderBy: { id: "desc" },
       include: {
-        user: { select: { username: true } },
-        problem: { select: { title: true } },
+        user: true,
+        problem: true,
       },
     });
     res.json({ success: true, submissions });
@@ -748,66 +759,134 @@ app.get("/api/submissions", async (_req, res) => {
   }
 });
 
-app.post("/submit", async (req, res) => {
-  console.log("Received Body:", req.body);
-  const { sourceCode, language = "cpp" } = req.body;
-  // Ensure problemId is captured and converted to a Number if provided
-  let problemIdRaw = (req.body && req.body.problemId) as any;
-  let problemId: number | undefined = undefined;
-  if (typeof problemIdRaw !== "undefined" && problemIdRaw !== null) {
-    const parsed = Number(problemIdRaw);
-    if (!Number.isNaN(parsed)) problemId = parsed;
-  }
-
-  if (typeof sourceCode !== "string") {
-    return res
-      .status(400)
-      .json({ error: "Invalid or missing sourceCode string" });
-  }
-
+app.post("/submit", authenticateToken, async (req: any, res: any) => {
   try {
-    const createData: any = {
-      code: sourceCode,
-      status: "Pending",
-      language,
-    };
+    const { problemId, sourceCode, language, contestId } = req.body;
 
-    if (typeof problemId !== "undefined") createData.problemId = problemId;
-    const user = (req as any).user;
-    const userIdFromToken = user?.id || user?.userId;
+    // 1. LẤY USER ID TỪ MIDDLEWARE authenticateToken (đã xác thực ở trên)
+    const userId = req.user?.userId || req.user?.id || null;
+
+    // 2. KIỂM TRA HẾT GIỜ CONTEST (Từ chối bài nộp muộn)
+    if (contestId) {
+      const contest = await prisma.contest.findUnique({
+        where: { id: Number(contestId) },
+      });
+      if (contest && contest.endTime) {
+        const now = new Date();
+        const end = new Date(contest.endTime);
+        if (now > end) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Kỳ thi đã kết thúc! Bài nộp của bạn không được công nhận.",
+          });
+        }
+      }
+    }
+
+    // 3. LƯU VÀO DATABASE
     const submission = await prisma.submission.create({
       data: {
         code: sourceCode,
-        language: language,
+        language: language || "cpp",
         status: "Pending",
-        userId: userIdFromToken ? Number(userIdFromToken) : null,
         problemId: Number(problemId),
+        userId: userId ? Number(userId) : null,
+        score: 0,
       },
     });
 
-    res.json({
-      success: true,
-      submissionId: submission.id,
-      message: "Submission created",
-    });
-    // Save source file for background judging (use absolute path)
+    // 4. TẠO FILE RA Ổ CỨNG CHO DOCKER ĐỌC (Diệt lỗi: No such file)
     const fileExtension = language === "python" ? "py" : "cpp";
     const filePath = path.join(
       __dirname,
       `submission_${submission.id}.${fileExtension}`,
     );
     fs.writeFileSync(filePath, sourceCode);
-    console.log("Saved submission file at", filePath);
 
-    // Kick off background judge (do not await)
-    judgeSubmission(submission.id).catch((err) =>
-      console.error("judgeSubmission error:", err),
-    );
+    // 5. TRẢ DỮ LIỆU ĐẦY ĐỦ VỀ CHO GIAO DIỆN HIỂN THỊ
+    const fullSubmission = await prisma.submission.findUnique({
+      where: { id: submission.id },
+      include: { user: true, problem: true },
+    });
+
+    res.json({
+      success: true,
+      submissionId: fullSubmission?.id,
+      submission: fullSubmission,
+    });
+
+    // 6. GỌI HÀM CHẤM BÀI
+    judgeSubmission(submission.id);
   } catch (error) {
-    console.error("Error creating submission:", error);
-    res.status(500).json({ error: "Failed to create submission" });
+    console.error("Lỗi nộp bài:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Lỗi hệ thống khi nộp bài." });
   }
 });
+
+// =================== TÍNH NĂNG MỚI BỔ SUNG ===================
+
+// 1. [ADMIN] XÓA VĨNH VIỄN 1 BÀI NỘP (SUBMISSION)
+app.delete(
+  "/api/admin/submissions/:id",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      await prisma.submission.delete({
+        where: { id: parseInt(req.params.id) },
+      });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi khi xóa bài nộp" });
+    }
+  },
+);
+
+// 2. [ADMIN] LẤY DANH SÁCH THÍ SINH ĐÃ VÀO 1 KỲ THI
+app.get(
+  "/api/admin/contests/:id/participants",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const participants = await prisma.contestParticipant.findMany({
+        where: { contestId: parseInt(req.params.id) },
+        include: { user: true },
+      });
+      res.json({ success: true, participants });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi tải danh sách thí sinh" });
+    }
+  },
+);
+
+// 3. [ADMIN] LỆNH ĐUỔI HOẶC MỞ LẠI CHO THÍ SINH (Phát sóng qua Socket.io)
+app.post(
+  "/api/admin/contests/:id/user-action",
+  authenticateToken,
+  isAdmin,
+  async (req: any, res: any) => {
+    try {
+      const contestId = parseInt(req.params.id);
+      const { userId, action } = req.body; // action: 'kick' hoặc 'reopen'
+
+      // Phát tín hiệu ra toàn mạng lưới để trình duyệt của thí sinh kia tự động nhận lệnh
+      io.emit("contest_action", {
+        contestId,
+        userId: parseInt(userId),
+        action,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Lỗi phát lệnh điều khiển" });
+    }
+  },
+);
+// =============================================================
 
 async function judgeSubmission(submissionId: number): Promise<void> {
   // Fetch submission to get problemId and related info
@@ -841,8 +920,9 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     return;
   }
 
-  // Get time limit from Problem if available
+  // Get time limit and memory limit from Problem if available
   let timeLimitMs = 1000;
+  let memoryLimitKb = 256000;
   let problemPoints = 100;
   try {
     const problem = await prisma.problem.findUnique({
@@ -850,6 +930,8 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     });
     if (problem && typeof problem.timeLimitMs === "number")
       timeLimitMs = problem.timeLimitMs;
+    if (problem && typeof problem.memoryLimitKb === "number")
+      memoryLimitKb = problem.memoryLimitKb;
     if (problem && typeof problem.points === "number")
       problemPoints = problem.points;
   } catch (e) {
@@ -1020,6 +1102,7 @@ async function judgeSubmission(submissionId: number): Promise<void> {
   let maxTimeMs = 0;
   let maxMemoryKb = 0;
   let totalScore = 0;
+  const testcaseResults: any[] = [];
 
   function parseTimeAndMemory(stderr: string): {
     timeMs: number | null;
@@ -1095,9 +1178,10 @@ async function judgeSubmission(submissionId: number): Promise<void> {
       ? fs.readFileSync(outPath, "utf8")
       : "";
 
-    const runTimeout = Math.max(1000, timeLimitMs + 200);
+    const runTimeout = Math.max(5000, timeLimitMs + 5000);
+    const memoryMb = Math.max(32, Math.ceil(memoryLimitKb / 1024));
     const winPath = inPath.replace(/\//g, "\\");
-    const cmdStr = `type "${winPath}" | docker run -i --rm --network none --pids-limit 64 --read-only -v "${projectRoot}:/app" -w /app --memory=128m --cpus=0.5 judge-box /usr/bin/time -v ${isPython ? `python3 ${fileName}` : `./${exeName}`}`;
+    const cmdStr = `type "${winPath}" | docker run -i --rm --network none --pids-limit 64 --read-only -v "${projectRoot}:/app" -w /app --memory=${memoryMb}m --cpus=0.5 judge-box /usr/bin/time -v ${isPython ? `python3 ${fileName}` : `./${exeName}`}`;
 
     const runRes = await new Promise<{
       code: number | null;
@@ -1140,7 +1224,15 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     if (parsedUsage.memoryKb)
       maxMemoryKb = Math.max(maxMemoryKb, parsedUsage.memoryKb);
 
+    const pointsPerTest = Math.floor(problemPoints / inFiles.length);
     if (runRes.timedOut) {
+      testcaseResults.push({
+        id: testNum,
+        status: "TLE",
+        time: parsedUsage.timeMs || timeLimitMs,
+        memory: parsedUsage.memoryKb || 0,
+        points: 0,
+      });
       const statusText = `Time Limit Exceeded (TLE) on test ${testNum}`;
       try {
         await prisma.submission.update({
@@ -1150,7 +1242,9 @@ async function judgeSubmission(submissionId: number): Promise<void> {
             time: maxTimeMs,
             memory: maxMemoryKb,
             score: totalScore,
+            details: JSON.stringify(testcaseResults),
           },
+          include: { user: true, problem: true },
         });
       } catch (e) {
         console.error("Failed to set TLE status:", e);
@@ -1160,6 +1254,13 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     }
 
     if (runRes.code !== 0) {
+      testcaseResults.push({
+        id: testNum,
+        status: "RTE",
+        time: parsedUsage.timeMs || 0,
+        memory: parsedUsage.memoryKb || 0,
+        points: 0,
+      });
       const statusText = `Runtime Error (RTE) on test ${testNum}`;
       try {
         await prisma.submission.update({
@@ -1169,7 +1270,9 @@ async function judgeSubmission(submissionId: number): Promise<void> {
             time: maxTimeMs,
             memory: maxMemoryKb,
             score: totalScore,
+            details: JSON.stringify(testcaseResults),
           },
+          include: { user: true, problem: true },
         });
       } catch (e) {
         console.error("Failed to set RTE status:", e);
@@ -1182,6 +1285,13 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     const outTrim = userOutputRaw.trim();
     const expTrim = expectedRaw.trim();
     if (outTrim !== expTrim) {
+      testcaseResults.push({
+        id: testNum,
+        status: "WA",
+        time: parsedUsage.timeMs || 0,
+        memory: parsedUsage.memoryKb || 0,
+        points: 0,
+      });
       const statusText = `Wrong Answer (WA) on test ${testNum}`;
       try {
         await prisma.submission.update({
@@ -1191,7 +1301,9 @@ async function judgeSubmission(submissionId: number): Promise<void> {
             time: maxTimeMs,
             memory: maxMemoryKb,
             score: totalScore,
+            details: JSON.stringify(testcaseResults),
           },
+          include: { user: true, problem: true },
         });
       } catch (e) {
         console.error("Failed to set WA status:", e);
@@ -1201,9 +1313,15 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     }
 
     // Passed testcase, add points
-    totalScore += Math.floor(problemPoints / inFiles.length);
+    totalScore += pointsPerTest;
+    testcaseResults.push({
+      id: testNum,
+      status: "AC",
+      time: parsedUsage.timeMs || 0,
+      memory: parsedUsage.memoryKb || 0,
+      points: pointsPerTest,
+    });
   }
-
   // All tests passed
   try {
     await prisma.submission.update({
@@ -1213,7 +1331,9 @@ async function judgeSubmission(submissionId: number): Promise<void> {
         time: maxTimeMs,
         memory: maxMemoryKb,
         score: problemPoints,
+        details: JSON.stringify(testcaseResults),
       },
+      include: { user: true, problem: true },
     });
   } catch (e) {
     console.error("Failed to set AC status:", e);
@@ -1441,217 +1561,6 @@ app.get("/api/contests/:id/scoreboard", async (req: any, res: any) => {
       .json({ success: false, error: "Lỗi hệ thống khi tải Bảng xếp hạng!" });
   }
 });
-// =====================================================================
-
-// Maximum allowed source code size (64 KiB)
-const MAX_CODE_BYTES = 64 * 1024;
-
-app.post("/api/submit", async (req, res) => {
-  const safeSend = (statusCode: number, data: any) => {
-    if (!res.headersSent) res.status(statusCode).json(data);
-  };
-
-  const {
-    sourceCode: code,
-    userId = 1,
-    problemId = 1,
-    language = "cpp",
-  } = req.body;
-  const isPython = language === "python";
-
-  if (typeof code !== "string" || !code.trim()) {
-    return res.status(400).json({ error: "Vui lòng gửi code!" });
-  }
-  if (Buffer.byteLength(code, "utf8") > MAX_CODE_BYTES) {
-    return res.status(413).json({ error: "Payload quá lớn (giới hạn 64KB)" });
-  }
-
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "judge-"));
-  const fileExtension = isPython ? "py" : "cpp";
-  const srcPath = path.join(tmpDir, `submission.${fileExtension}`);
-  fs.writeFileSync(srcPath, code);
-
-  let submissionRecord: any = null;
-  try {
-    submissionRecord = await prisma.submission.create({
-      data: { userId, problemId, code, language, status: "Compiling" },
-    });
-    // TRẢ KẾT QUẢ NGAY CHO TRÌNH DUYỆT (Chống kẹt "Waiting...")
-    res.json({ success: true, submission_id: submissionRecord.id });
-  } catch (dbErr) {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (e) {}
-    return safeSend(500, { error: "Lỗi lưu vào database" });
-  }
-
-  // CHẠY NGẦM QUÁ TRÌNH CHẤM BÀI (Background Task)
-  (async () => {
-    const cleanupTmp = () => {
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch (e) {}
-    };
-
-    const exePath = path.join(tmpDir, "submission.exe");
-    if (!isPython) {
-      const compile = spawn("g++", [srcPath, "-o", exePath], {
-        cwd: tmpDir,
-        timeout: 10000,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      let compileStderr = "";
-      compile.stderr.on("data", (data) => (compileStderr += data.toString()));
-
-      const compileSuccess = await new Promise<boolean>((resolve) => {
-        compile.on("error", () => resolve(false));
-        compile.on("close", (code) => resolve(code === 0));
-      });
-
-      if (!compileSuccess) {
-        await prisma.submission.update({
-          where: { id: submissionRecord.id },
-          data: { status: "Compile Error (CE)", compileOutput: compileStderr },
-        });
-        return cleanupTmp();
-      }
-    }
-
-    await prisma.submission.update({
-      where: { id: submissionRecord.id },
-      data: {
-        status: "Running",
-      },
-    });
-
-    const candidates = [
-      path.join(process.cwd(), "problem", String(problemId), "testcases"),
-      path.join(process.cwd(), "problems", String(problemId), "testcases"),
-    ];
-    let testcasesDir = candidates.find((c) => fs.existsSync(c));
-    let inFiles: string[] = [];
-
-    if (testcasesDir) {
-      inFiles = fs
-        .readdirSync(testcasesDir)
-        .filter((f) => f.endsWith(".in"))
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    }
-
-    if (inFiles.length === 0) {
-      await prisma.submission.update({
-        where: { id: submissionRecord.id },
-        data: { status: "System Error (No testcases found)" },
-      });
-      return cleanupTmp();
-    }
-
-    // KHỞI TẠO BIẾN ĐO LƯỜNG CHI TIẾT TEST CASES
-    let maxTimeMs = 0;
-    let maxMemoryKb = 0;
-    let testcaseResults: any[] = [];
-    let finalStatus = "Accepted (AC)";
-    let isFirstFail = true;
-
-    for (let i = 0; i < inFiles.length; i++) {
-      const inFile = inFiles[i];
-      const base = inFile.replace(/\.in$/, "");
-      const inPath = path.join(testcasesDir!, inFile);
-      const outPath = path.join(testcasesDir!, `${base}.out`);
-
-      const inputData = fs.existsSync(inPath)
-        ? fs.readFileSync(inPath, "utf8")
-        : "";
-      const expectedData = fs.existsSync(outPath)
-        ? fs.readFileSync(outPath, "utf8")
-        : "";
-
-      const testResult = await new Promise<{
-        kind: "AC" | "WA" | "TLE" | "RTE";
-        stderr?: string;
-        timeMs: number;
-      }>((resolve) => {
-        const runOpts = isPython
-          ? { exe: "python3", args: [srcPath] }
-          : { exe: exePath, args: [] };
-        const startTime = Date.now();
-        const run = spawn(runOpts.exe, runOpts.args, {
-          cwd: tmpDir,
-          timeout: 5000,
-          stdio: ["pipe", "pipe", "pipe"],
-        });
-
-        let stdout = "";
-        let stderr = "";
-        run.stdout.on("data", (d) => (stdout += d.toString()));
-        run.stderr.on("data", (d) => (stderr += d.toString()));
-
-        run.on("error", (err) =>
-          resolve({
-            kind: "RTE",
-            stderr: String(err),
-            timeMs: Date.now() - startTime,
-          }),
-        );
-        run.on("close", (code, signal) => {
-          const timeMs = Date.now() - startTime;
-          if (signal) resolve({ kind: "TLE", timeMs });
-          else if (code !== 0) resolve({ kind: "RTE", stderr, timeMs });
-          else {
-            if (stdout.trim() === expectedData.trim())
-              resolve({ kind: "AC", timeMs });
-            else resolve({ kind: "WA", timeMs });
-          }
-        });
-
-        if (run.stdin) {
-          run.stdin.write(inputData);
-          run.stdin.end();
-        }
-      });
-
-      const memKb = Math.floor(Math.random() * 500) + 1500;
-      maxTimeMs = Math.max(maxTimeMs, testResult.timeMs);
-      maxMemoryKb = Math.max(maxMemoryKb, memKb);
-
-      testcaseResults.push({
-        id: i + 1,
-        status: testResult.kind,
-        time: testResult.timeMs,
-        memory: memKb,
-        points: testResult.kind === "AC" ? 10 : 0,
-      });
-
-      if (testResult.kind !== "AC" && isFirstFail) {
-        finalStatus =
-          testResult.kind === "WA"
-            ? "Wrong Answer (WA)"
-            : testResult.kind === "TLE"
-              ? "Time Limit Exceeded (TLE)"
-              : "Runtime Error (RTE)";
-        isFirstFail = false;
-      }
-    }
-
-    const totalScore = testcaseResults.reduce(
-      (acc, tc) => acc + (tc.points || 0),
-      0,
-    );
-
-    // ĐÂY LÀ NƠI THỰC HIỆN "BƯỚC 2": ÉP KIỂU JSON.STRINGIFY TRƯỚC KHI LƯU DB
-    await prisma.submission.update({
-      where: { id: submissionRecord.id },
-      data: {
-        status: finalStatus,
-        time: maxTimeMs,
-        memory: maxMemoryKb,
-        score: totalScore,
-        details: JSON.stringify(testcaseResults), // <--- Ép thành chuỗi để lưu vào SQLite
-      },
-    });
-    cleanupTmp();
-  })(); // Hàm nặc danh chạy ngầm
-});
 
 // [API] LẤY DANH SÁCH BÀI TẬP CỦA MỘT KỲ THI
 app.get(
@@ -1705,6 +1614,41 @@ app.delete(
   },
 );
 
+// [API] XÁC THỰC MẬT KHẨU PHÒNG THI (Server-side)
+app.post(
+  "/api/contests/:id/verify-password",
+  authenticateToken,
+  async (req: any, res: any) => {
+    try {
+      const contestId = parseInt(req.params.id);
+      const { password } = req.body;
+
+      const contest = await prisma.contest.findUnique({
+        where: { id: contestId },
+      });
+
+      if (!contest) {
+        return res.status(404).json({ success: false, error: "Không tìm thấy kỳ thi" });
+      }
+
+      // Nếu contest không có password thì cho vào luôn
+      if (!contest.password || contest.password.trim() === "") {
+        return res.json({ success: true });
+      }
+
+      // So sánh password
+      if (password === contest.password) {
+        return res.json({ success: true });
+      } else {
+        return res.json({ success: false, error: "Mật khẩu không chính xác!" });
+      }
+    } catch (error) {
+      console.error("Error verifying contest password:", error);
+      res.status(500).json({ success: false, error: "Lỗi hệ thống" });
+    }
+  },
+);
+
 // Lấy danh sách Contests
 app.get("/api/contests", async (_req, res) => {
   try {
@@ -1719,7 +1663,8 @@ app.get("/api/contests", async (_req, res) => {
         title: c.title,
         startTime: c.startTime,
         endTime: c.endTime,
-        isPrivate: c.password !== null && c.password.trim() !== "", // True nếu có đặt mật khẩu
+        isPrivate: c.password !== null && c.password.trim() !== "",
+        requireCamera: !!c.requireCamera,
       };
     });
 

@@ -57,12 +57,13 @@ model Submission {
 }
 
 model Contest {
-  id          Int       @id @default(autoincrement())
-  title       String
-  description String?
-  startTime   DateTime
-  endTime     DateTime
-  password    String?   
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  startTime     DateTime
+  endTime       DateTime
+  password      String?
+  requireCamera Boolean   @default(false)
   
   problems    Problem[] @relation("ContestProblems") 
   createdAt   DateTime  @default(now())

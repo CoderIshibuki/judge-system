@@ -436,7 +436,7 @@
       <!-- 3. SUBMISSIONS VIEW -->
       <div
         id="submissions-view"
-        class="view-section hidden w-full h-full flex-col p-6 bg-gray-900 overflow-hidden"
+        class="view-section hidden w-full h-full flex flex-col p-6 bg-gray-900 overflow-hidden"
       >
         <h2
           class="text-2xl font-bold mb-4 text-white border-b border-gray-700 pb-2 shrink-0"
@@ -488,7 +488,7 @@
       <!-- 4. USERS VIEW -->
       <div
         id="users-view"
-        class="view-section hidden w-full h-full flex-col p-6 bg-gray-900 overflow-hidden"
+        class="view-section hidden w-full h-full flex flex-col p-6 bg-gray-900 overflow-hidden"
       >
         <div
           class="flex justify-between items-end mb-4 border-b border-gray-700 pb-2 shrink-0"
@@ -543,7 +543,7 @@
       <!-- 5. CONTESTS VIEW -->
       <div
         id="contests-view"
-        class="view-section hidden w-full h-full flex-col p-6 bg-gray-900 overflow-hidden"
+        class="view-section hidden w-full h-full flex flex-col p-6 bg-gray-900 overflow-hidden"
       >
         <h2
           class="text-2xl font-bold mb-4 text-white border-b border-gray-700 pb-2 shrink-0"
@@ -1142,6 +1142,20 @@
               />
             </div>
           </div>
+          <!-- Tùy chọn Camera chống gian lận -->
+          <div class="flex items-center space-x-3 mt-2 bg-gray-700/30 p-3 rounded-lg border border-gray-600">
+            <input
+              type="checkbox"
+              id="admin-contest-cam"
+              class="w-5 h-5 rounded bg-gray-900 border-gray-600 text-red-500 focus:ring-red-500 cursor-pointer accent-red-500"
+            />
+            <div>
+              <label for="admin-contest-cam" class="text-sm font-semibold text-gray-200 cursor-pointer">
+                📷 Yêu cầu mở Camera (Chống gian lận)
+              </label>
+              <p class="text-xs text-gray-400 mt-0.5">Thí sinh phải bật camera suốt kỳ thi. Từ chối = không vào được.</p>
+            </div>
+          </div>
         </div>
         <div
           class="p-4 border-t border-gray-700 flex justify-end space-x-3 bg-gray-800/50 rounded-b-lg"
@@ -1423,13 +1437,6 @@
       >
         00:00:00
       </div>
-
-      <button
-        onclick="app.exitContestLobby()"
-        class="mt-12 text-gray-500 hover:text-red-400 underline transition-colors"
-      >
-        Thoát phòng chờ (Về trang chủ)
-      </button>
     </div>
 
     <!-- Modal Xem Lại Code (Replay) -->
@@ -1663,11 +1670,155 @@
       </div>
     </div>
 
+    <!-- Modal Quản Lý Thí Sinh Trong Phòng Thi -->
+    <div
+      id="modal-contest-users"
+      class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[80] transition-opacity"
+    >
+      <div
+        class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl shadow-2xl flex flex-col max-h-[80vh]"
+      >
+        <div
+          class="p-4 border-b border-gray-700 flex justify-between items-center shrink-0 bg-black rounded-t-lg"
+        >
+          <h3
+            id="modal-contest-users-title"
+            class="text-xl font-bold text-white"
+          >
+            Quản lý Thí sinh
+          </h3>
+          <button
+            onclick="
+              document
+                .getElementById('modal-contest-users')
+                .classList.add('hidden')
+            "
+            class="text-gray-400 hover:text-red-400"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-0 flex-1 overflow-auto bg-[#0d1117]">
+          <table class="w-full text-left border-collapse whitespace-nowrap">
+            <thead
+              class="bg-gray-900 border-b border-gray-700 text-gray-300 text-sm sticky top-0"
+            >
+              <tr>
+                <th class="p-3 w-16 text-center font-bold">User ID</th>
+                <th class="p-3 font-bold">Tên Thí Sinh</th>
+                <th class="p-3 w-48 text-center font-bold">Quản lý</th>
+              </tr>
+            </thead>
+            <tbody
+              id="admin-contest-users-list"
+              class="text-sm divide-y divide-gray-800 font-medium"
+            >
+              <!-- Data đổ vào đây -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Giám sát Camera -->
+    <div
+      id="modal-camera-monitor"
+      class="fixed inset-0 bg-black/95 hidden items-center justify-center z-[90] transition-opacity"
+    >
+      <div
+        class="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-6xl h-[85vh] shadow-2xl flex flex-col"
+      >
+        <div
+          class="p-4 border-b border-gray-700 flex justify-between items-center shrink-0 bg-black rounded-t-lg"
+        >
+          <div class="flex items-center space-x-3">
+            <h3
+              id="modal-camera-title"
+              class="text-xl font-bold text-white flex items-center"
+            >
+              <span class="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2"></span>
+              Giám Sát Camera Phòng Thi
+            </h3>
+          </div>
+          <button
+            onclick="app.closeCameraMonitor()"
+            class="text-gray-400 hover:text-red-400"
+          >
+            <svg
+              class="w-7 h-7"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-4 flex-1 overflow-auto">
+          <!-- Grid chứa các camera -->
+          <div
+            id="camera-grid"
+            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+          >
+            <!-- JS sẽ thêm các khung camera vào đây -->
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Notification -->
     <div
       id="toast"
       class="fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 opacity-0 translate-y-10 z-50 text-sm font-medium"
     ></div>
+
+    <!-- 📷 CAMERA PiP (Chống gian lận) — Ẩn mặc định -->
+    <div
+      id="camera-pip"
+      class="fixed bottom-20 right-4 z-[100] hidden flex-col items-end"
+    >
+      <div class="bg-black rounded-xl border-2 border-red-500 shadow-2xl shadow-red-500/20 overflow-hidden" style="width: 220px;">
+        <div class="bg-red-900/80 px-3 py-1.5 flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span id="camera-dot" class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+            <span class="text-[11px] font-bold text-red-200 uppercase tracking-wider">Camera ON</span>
+          </div>
+          <span class="text-[10px] text-red-400">Giám sát</span>
+        </div>
+        <video
+          id="camera-video"
+          autoplay
+          muted
+          playsinline
+          class="w-full aspect-video object-cover bg-gray-900"
+          style="transform: scaleX(-1);"
+        ></video>
+      </div>
+      <!-- Cảnh báo mất camera -->
+      <div
+        id="camera-warning"
+        class="hidden mt-2 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg animate-pulse shadow-lg"
+      >
+        ⚠️ Camera bị mất! Hãy bật lại ngay.
+      </div>
+    </div>
 
     <script src="/app.js"></script>
   </body>
