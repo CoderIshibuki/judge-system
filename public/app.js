@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // === 1. KHAI BÁO BIẾN UI ===
+  // ui variables
   const toast = document.getElementById("toast");
   const connStatus = document.getElementById("conn-status");
 
@@ -25,7 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let cameraStream = null;
   let cameraMonitorInterval = null;
 
-  // === 2. ĐỐI TƯỢNG APP (XỬ LÝ CHUYỂN TAB & DỮ LIỆU) ===
+  // app logic
   window.app = {
     token: localStorage.getItem("token") || null,
     username: localStorage.getItem("username") || null,
@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // ---- TÍNH NĂNG MỚI ----
+
     deleteSubmission: async function (id) {
       if (
         !confirm(
@@ -148,7 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     openEditContest: async function (id) {
       try {
-        // Lấy lại danh sách từ ADMIN API để có đầy đủ data (password, requireCamera, problems...)
+        // admin data
         const res = await fetch("/api/admin/contests", {
           headers: { Authorization: "Bearer " + this.token },
         });
@@ -164,7 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
           document.getElementById("admin-contest-desc").value =
             c.description || "";
 
-          // Hàm nhỏ để chuyển đổi Time Zone cho input datetime-local
+          // local time
           const toLocal = (isoString) => {
             if (!isoString) return "";
             const date = new Date(isoString);
@@ -180,17 +180,17 @@ document.addEventListener("DOMContentLoaded", () => {
           );
           document.getElementById("admin-contest-pwd").value = c.password || "";
 
-          // Load camera checkbox
+          // camera setting
           const camCheckbox = document.getElementById("admin-contest-cam");
           if (camCheckbox) camCheckbox.checked = !!c.requireCamera;
 
-          // Lấy ra danh sách ID bài tập
+          // problem ids
           const probIds = c.problems
             ? c.problems.map((p) => p.id || p.problemId).join(", ")
             : "";
           document.getElementById("admin-contest-probs").value = probIds;
 
-          // Hiện Modal
+          // show modal
           const modal = document.getElementById("modal-contest");
           modal.classList.remove("hidden");
           modal.classList.add("flex");
@@ -214,16 +214,16 @@ document.addEventListener("DOMContentLoaded", () => {
           headers: { Authorization: "Bearer " + this.token },
         });
 
-        // 1. Lấy dữ liệu thô dưới dạng text trước (Quan trọng!)
+        // raw data
         const text = await res.text();
         console.log("👉 Server trả về nguyên bản:", text);
 
-        // 2. Thử giải mã JSON từ text đó
+        // parse json
         let data;
         try {
           data = JSON.parse(text);
         } catch (err) {
-          // Nếu server trả về lỗi HTML (404/500), hiện thẳng lên khung đề bài
+          // handle error
           document.getElementById("active-problem-title").textContent =
             "Lỗi Server 💥";
           document.getElementById("active-problem-desc").innerHTML =
@@ -243,7 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
           document.getElementById("active-problem-desc").innerHTML =
             prob.description || "Không có mô tả chi tiết.";
 
-          // 👉 CỐ ĐỊNH BƯỚC 1: Lưu ID vào biến toàn cục để nút Submit nhận diện được bài
+          // set current problem
           app.currentProblemId = data.problem.id;
         } else {
           showToast(data.error || "Không tìm thấy đề bài!", "bg-red-500");
@@ -274,19 +274,19 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Logged out successfully", "bg-green-500");
     },
 
-    allProblems: [], // Biến mới để lưu kho bài tập trên máy
+    allProblems: [], // problems storage
 
     fetchProblems: async function () {
       try {
         const res = await fetch("/problems");
         this.allProblems = await res.json();
-        this.renderProblems(this.allProblems); // Gọi hàm vẽ bảng
+        this.renderProblems(this.allProblems); // render table
       } catch (err) {
         console.error("Error fetching problems", err);
       }
     },
 
-    // 1. HÀM MỞ MODAL THÊM USER (Làm sạch form cũ nếu có)
+    // open user modal
     openAddUserModal: function () {
       document.getElementById("add-username").value = "";
       document.getElementById("add-password").value = "";
@@ -297,7 +297,7 @@ document.addEventListener("DOMContentLoaded", () => {
       modal.classList.add("flex");
     },
 
-    // 2. HÀM GỬI DATA LÊN API ĐỂ TẠO USER
+    // create user
     submitAddUser: async function () {
       const username = document.getElementById("add-username").value.trim();
       const password = document.getElementById("add-password").value;
@@ -319,8 +319,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (data.success) {
           showToast("Đã thêm User thành công!", "bg-green-500");
-          document.getElementById("modal-add-user").classList.add("hidden"); // Đóng form
-          this.fetchAdminUsers(); // Load lại bảng danh sách User ngay lập tức
+          document.getElementById("modal-add-user").classList.add("hidden"); // close modal
+          this.fetchAdminUsers(); // refresh users
         } else {
           showToast(data.error || "Lỗi khi thêm user", "bg-red-500");
         }
@@ -371,7 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const isAdmin =
               app.role === "ADMIN" || localStorage.getItem("role") === "ADMIN";
 
-            // 🌟 KIỂM TRA MẬT KHẨU (Dùng cờ isPrivate từ server)
+            // contest password
             const isProtected = !!contest.isPrivate;
 
             let actionHtml = "";
@@ -380,7 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (isEnded) {
               actionHtml = `<button disabled class="bg-gray-800 text-red-500 px-4 py-1.5 rounded font-semibold text-sm cursor-not-allowed border border-gray-700 w-full whitespace-nowrap">Đã kết thúc</button>`;
             } else if (isFinished) {
-              // 🌟 KHÓA CHẶT CỬA: THÍ SINH KHÔNG THỂ TỰ RESET ĐƯỢC NỮA
+              // contest finished
               actionHtml = `<button disabled class="bg-gray-800 text-gray-500 px-4 py-1.5 rounded font-semibold text-sm cursor-not-allowed border border-gray-700 w-full whitespace-nowrap flex items-center justify-center">
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                 Bị Khóa
@@ -418,7 +418,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // Tách logic vẽ bảng ra hàm riêng để tái sử dụng khi Search
+    // render problems
     renderProblems: function (problemsList) {
       const tbody = document.getElementById("problems-table-body");
       if (!tbody) return;
@@ -450,10 +450,10 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     openProblem: function (problem) {
-      // Cập nhật ID bài đang làm
+      // set problem id
       app.currentProblemId = problem.id;
 
-      // Đổ nội dung đề bài vào Sidebar
+      // problem desc
       document.getElementById("active-problem-title").textContent =
         `${problem.id}. ${problem.title}`;
       document.getElementById("active-problem-limits").textContent =
@@ -461,10 +461,10 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("active-problem-desc").textContent =
         problem.description;
 
-      // Chuyển sang màn hình Editor
+      // editor view
       this.switchTab("editor-view");
 
-      // Xóa kết quả chấm bài cũ trên màn hình
+      // clear results
       const resultOutput = document.getElementById("result-output");
       if (resultOutput)
         resultOutput.innerHTML =
@@ -528,13 +528,13 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     submitCode: async function () {
-      // Kiểm tra xem đã chọn bài chưa
+      // check selection
       if (!app.currentProblemId) {
         showToast("Vui lòng chọn một bài tập trước khi nộp!", "bg-yellow-500");
         return;
       }
 
-      // Lấy code từ editor toàn cục (window.editor an toàn hơn)
+      // get code
       const code = window.editor.getValue();
 
       const langElement = document.getElementById("language-select");
@@ -588,7 +588,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // HÀM XEM LẠI CODE (REPLAY)
+    // replay code
     viewReplay: async function (subId) {
       if (!this.token)
         return showToast("Vui lòng đăng nhập để xem!", "bg-red-500");
@@ -597,11 +597,11 @@ document.addEventListener("DOMContentLoaded", () => {
           headers: { Authorization: "Bearer " + this.token },
         });
 
-        // Chuyển thành text trước để xem Server trả về cái quái gì
+        // raw data
         const text = await res.text();
 
         try {
-          const data = JSON.parse(text); // Ép sang JSON
+          const data = JSON.parse(text); // parse json
           if (data.success) {
             document.getElementById("replay-username").textContent =
               data.username;
@@ -617,7 +617,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast(data.error, "bg-yellow-500 text-yellow-900");
           }
         } catch (parseErr) {
-          console.error("Lỗi do Server không trả về JSON. Nội dung:", text);
+          // handle error
           showToast("Lỗi API! F12 để xem chi tiết.", "bg-red-500");
         }
       } catch (e) {
@@ -639,12 +639,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const isAdmin =
         this.role === "ADMIN" || localStorage.getItem("role") === "ADMIN";
 
-      // 🌟 TÍNH NĂNG MẬT KHẨU — XÁC THỰC PHÍA SERVER
+      // contest password
       if (!isAdmin && isProtected) {
         const userPass = prompt(
           `🔒 KỲ THI CÓ MẬT KHẨU!\nVui lòng nhập mật khẩu để vào thi:`,
         );
-        if (userPass === null) return; // Hủy bấm cancel
+        if (userPass === null) return; 
 
         try {
           const res = await fetch(`/api/contests/${contestId}/verify-password`, {
@@ -666,7 +666,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // 📷 CAMERA: Yêu cầu bật camera trước khi vào thi
+      // camera requirement
       if (requireCamera && !isAdmin) {
         const camConfirm = confirm(
           "📷 KỲ THI NÀY YÊU CẦU BẬT CAMERA CHỐNG GIAN LẬN!\n\nCamera sẽ được bật suốt quá trình thi.\nBấm OK để cho phép truy cập camera.",
@@ -764,7 +764,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (data.success) {
           showToast("Sửa điểm thành công!", "bg-green-500");
-          this.fetchSubmissions(); // Tải lại bảng để cập nhật màu sắc
+          this.fetchSubmissions();
         } else {
           showToast(data.error || "Lỗi khi sửa điểm", "bg-red-500");
         }
@@ -773,7 +773,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // BẮT ĐẦU VÀO THI (Chế độ Lockdown)
+    // start contest
     startContest: async function (contestId, title, endTimeStr) {
       this.currentContestId = contestId;
 
@@ -810,7 +810,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // HÀM THOÁT KỲ THI (Mở khóa chức năng)
+    // exit contest
     exitContest: function (isForced = false) {
       if (
         !isForced &&
@@ -822,7 +822,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (this.contestTimer) clearInterval(this.contestTimer);
 
-      // TẮT CAMERA khi thoát thi
+      // stop camera
       this.stopCamera();
 
       if (this.currentContestId) {
@@ -846,7 +846,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     },
 
-    // ========== HỆ THỐNG CAMERA CHỐNG GIAN LẬN ==========
+    // camera logic
     cameraRequired: false,
 
     startCamera: async function () {
@@ -857,17 +857,17 @@ document.addEventListener("DOMContentLoaded", () => {
           videoEl.srcObject = cameraStream;
           videoEl.play();
         }
-        // Hiện PiP widget
+        // pip widget
         const pip = document.getElementById("camera-pip");
         if (pip) {
           pip.classList.remove("hidden");
           pip.classList.add("flex");
         }
-        // Ẩn warning ban đầu
+        // hide warning
         const warn = document.getElementById("camera-warning");
         if (warn) warn.classList.add("hidden");
 
-        // Bắt đầu giám sát camera
+        // start monitor
         this.startCameraMonitor();
         return true;
       } catch (err) {
@@ -877,20 +877,16 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     stopCamera: function () {
-      // Dừng monitor
       if (cameraMonitorInterval) {
         clearInterval(cameraMonitorInterval);
         cameraMonitorInterval = null;
       }
-      // Dừng stream
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
         cameraStream = null;
       }
-      // Dọn video element
       const videoEl = document.getElementById("camera-video");
       if (videoEl) videoEl.srcObject = null;
-      // Ẩn PiP widget
       const pip = document.getElementById("camera-pip");
       if (pip) {
         pip.classList.add("hidden");
@@ -913,24 +909,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const tracks = cameraStream.getVideoTracks();
         if (!tracks.length || tracks[0].readyState === "ended" || !tracks[0].enabled) {
-          // Camera bị mất
           if (warn) warn.classList.remove("hidden");
           if (dot) dot.className = "w-2.5 h-2.5 bg-gray-500 rounded-full";
           showToast("⚠️ Camera bị mất tín hiệu! Hãy bật lại ngay.", "bg-red-600");
         } else {
-          // Camera OK
           if (warn) warn.classList.add("hidden");
           if (dot) dot.className = "w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse";
-          
-          // Gửi frame camera lên Server cho Admin xem
+
           const videoEl = document.getElementById("camera-video");
           if (videoEl && app.currentContestId && app.token) {
             try {
               const canvas = document.createElement("canvas");
-              canvas.width = 320; // Giảm độ phân giải để đỡ tốn băng thông
+              canvas.width = 320; 
               canvas.height = 240;
               const ctx = canvas.getContext("2d");
-              // Mirror ảnh giống user nhìn
+
               ctx.translate(canvas.width, 0);
               ctx.scale(-1, 1);
               ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
@@ -951,8 +944,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 3000);
     },
 
-    // 5. TẢI ĐỀ THI CỦA RIÊNG CONTEST
-    // TẢI ĐỀ THI CỦA RIÊNG CONTEST
+    // contest problems
     fetchContestProblems: async function (contestId) {
       try {
         const res = await fetch(`/api/contests/${contestId}/problems`, {
@@ -976,7 +968,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
 
-          // Vẽ danh sách bài tập chuẩn (chỉ có ID, Tên, Time, Mem, Điểm gốc)
+          // render problems
           data.problems.forEach((prob) => {
             const tr = document.createElement("tr");
             tr.className =
@@ -1008,14 +1000,13 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("admin-user-id").value = id;
       document.getElementById("admin-user-name").textContent = u.username;
       document.getElementById("admin-user-role").value = u.role;
-      document.getElementById("admin-user-pwd").value = ""; // Luôn để trống pass
-
+      document.getElementById("admin-user-pwd").value = ""; // clear pass
       const modal = document.getElementById("modal-user");
       modal.classList.remove("hidden");
       modal.classList.add("flex");
     },
 
-    // HÀM LOAD DANH SÁCH TESTCASE CỦA 1 BÀI
+    // fetch testcases
     fetchTestcases: async function (probId) {
       const tbody = document.getElementById("admin-tc-list");
       tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Đang quét thư mục...</td></tr>`;
@@ -1063,13 +1054,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // HÀM MỞ VÀ VẼ BẢNG LIVE SCOREBOARD
+    // scoreboard view
     viewScoreboard: async function (contestId, title) {
-      // Lưu lại ID để dùng cho nút "Làm mới"
+      // cache id
       this.currentScoreboardId = contestId;
       this.currentScoreboardTitle = title;
 
-      // Bật Modal lên
+      // open modal
       const modal = document.getElementById("modal-scoreboard");
       modal.classList.remove("hidden");
       modal.classList.add("flex");
@@ -1086,27 +1077,27 @@ document.addEventListener("DOMContentLoaded", () => {
         const data = await res.json();
 
         if (data.success) {
-          // 1. VẼ DÒNG TIÊU ĐỀ (HEADER)
+          // render header
           let headHtml = `
                         <tr>
                             <th class="p-3 font-bold w-16 text-center border-r border-gray-700">Top</th>
                             <th class="p-3 font-bold w-48 text-left border-r border-gray-700">Thí sinh</th>
                             <th class="p-3 font-bold w-24 text-center border-r border-gray-700 text-yellow-500">Tổng điểm</th>
                     `;
-          // Thêm linh động các cột Bài 1, Bài 2...
+          // problem columns
           data.problems.forEach((p, index) => {
             headHtml += `<th class="p-3 font-bold text-center border-r border-gray-700 hover:text-blue-400 cursor-pointer" title="${p.title}">Bài ${index + 1}</th>`;
           });
           headHtml += `</tr>`;
           document.getElementById("scoreboard-head").innerHTML = headHtml;
 
-          // 2. VẼ DANH SÁCH THÍ SINH
+          // render scoreboard
           let bodyHtml = "";
           if (data.scoreboard.length === 0) {
             bodyHtml = `<tr><td colspan="10" class="p-8 text-center text-gray-500 italic">Chưa có thí sinh nào nộp bài hợp lệ trong kỳ thi này.</td></tr>`;
           } else {
             data.scoreboard.forEach((user, idx) => {
-              // Top 1, 2, 3 có màu mạ vàng mạ bạc cho xịn
+              // rank color
               let rankColor = "text-gray-400";
               if (idx === 0)
                 rankColor =
@@ -1125,7 +1116,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <td class="p-3 text-center text-yellow-500 font-bold border-r border-gray-800 text-base">${user.total}</td>
                             `;
 
-              // In điểm của từng bài
+              // problem points
               data.problems.forEach((p) => {
                 const pScore = user.details[p.id];
                 if (pScore !== undefined) {
@@ -1137,7 +1128,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         : "text-red-500";
                   row += `<td class="p-3 text-center font-bold border-r border-gray-800 ${color}">${pScore}</td>`;
                 } else {
-                  row += `<td class="p-3 text-center text-gray-600 border-r border-gray-800">-</td>`; // Chưa làm
+                  row += `<td class="p-3 text-center text-gray-600 border-r border-gray-800">-</td>`; // not done
                 }
               });
 
@@ -1156,7 +1147,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // HÀM XÓA 1 BỘ TESTCASE
+    // delete testcase
     deleteTestcase: async function (probId, name) {
       if (!confirm(`Xóa bộ testcase "${name}.in" và "${name}.out"?`)) return;
       try {
@@ -1169,7 +1160,7 @@ document.addEventListener("DOMContentLoaded", () => {
         );
         if ((await res.json()).success) {
           showToast(`Đã xóa Testcase ${name}`, "bg-red-500");
-          this.fetchTestcases(probId); // Load lại bảng file ngay lập tức
+          this.fetchTestcases(probId); // refresh list
         }
       } catch (e) {
         showToast("Lỗi xóa testcase", "bg-red-500");
@@ -1252,7 +1243,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 : score > 0
                   ? "text-yellow-500"
                   : "text-red-500";
-            // 1. Kiểm tra Admin để tạo nút sửa điểm
+            // edit button
             const isAdmin =
               app.role === "ADMIN" || localStorage.getItem("role") === "ADMIN";
 
@@ -1264,7 +1255,7 @@ document.addEventListener("DOMContentLoaded", () => {
               `;
             }
 
-            // 2. Nối chuỗi HTML (ĐÚNG 6 CỘT, KHÔNG THỪA KHÔNG THIẾU)
+            // render row
             tr.innerHTML = `
                 <!-- Cột 1: STATUS -->
                 <td class="p-3 text-center align-middle">
@@ -1329,7 +1320,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const tr = document.createElement("tr");
             tr.className = "hover:bg-gray-700/50 transition-colors";
 
-            // Màu sắc rank giống VNOI (Top 1 Đỏ, Top 2 Cam...)
+            // rank color
             let rankColor = "text-gray-400";
             if (index === 0) rankColor = "text-red-500 font-bold";
             else if (index === 1) rankColor = "text-orange-500 font-bold";
@@ -1354,9 +1345,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    adminAllContests: [], // Chứa dữ liệu Contest
+    adminAllContests: [], // admin contests
 
-    // HÀM XÓA BÀI TẬP
+    // delete problem
     deleteProblem: async function (id) {
       if (
         !confirm(
@@ -1379,8 +1370,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // HÀM LOAD BẢNG CONTEST ADMIN
-    // HÀM CHO ADMIN: LẤY VÀ QUẢN LÝ KỲ THI
+    // admin contests
     fetchAdminContests: async function () {
       try {
         const res = await fetch("/api/contests", {
@@ -1436,7 +1426,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // HÀM XÓA CONTEST
+    // delete contest
     deleteContest: async function (id) {
       if (!confirm(`Xóa kỳ thi #${id}? (Không ảnh hưởng đến bài tập gốc)`))
         return;
@@ -1455,7 +1445,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // MỞ MODAL CONTEST
+    // open contest modal
     openContestModal: function (id = null) {
       const modal = document.getElementById("modal-contest");
       document.getElementById("admin-contest-id").value = id || "";
@@ -1466,12 +1456,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (id) {
         const c = this.adminAllContests.find((x) => x.id === id);
         if (c) {
-          // Đổ dữ liệu cũ vào form
+          // fill form
           document.getElementById("admin-contest-name").value = c.title;
           document.getElementById("admin-contest-desc").value =
             c.description || "";
           document.getElementById("admin-contest-pwd").value = c.password || "";
-          // Ép định dạng datetime-local (Bỏ phần Z và giây phía sau)
+          // iso format
           document.getElementById("admin-contest-start").value = new Date(
             c.startTime,
           )
@@ -1502,13 +1492,13 @@ document.addEventListener("DOMContentLoaded", () => {
       modal.classList.add("flex");
     },
 
-    // HỆ THỐNG XEM CAMERA CỦA ADMIN
+    // camera monitor
     currentAdminCameraContestId: null,
 
     openCameraMonitor: function(contestId, title) {
       this.currentAdminCameraContestId = contestId;
       document.getElementById("modal-camera-title").innerHTML = `<span class="w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2 inline-block"></span> Giám Sát Camera: ${title}`;
-      document.getElementById("camera-grid").innerHTML = ""; // Xóa grid cũ
+      document.getElementById("camera-grid").innerHTML = ""; // clear grid
       
       const modal = document.getElementById("modal-camera-monitor");
       modal.classList.remove("hidden");
@@ -1526,7 +1516,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // === 3. XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ ===
+  // auth handlers
   authToggleBtn.addEventListener("click", () => {
     isLoginMode = !isLoginMode;
     authTitle.textContent = isLoginMode ? "Login" : "Register";
@@ -1583,7 +1573,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // === 4. TRÌNH SOẠN THẢO CODE (MONACO) & SUBMIT BUTTON ===
+  // editor logic (monaco)
   require.config({
     paths: {
       vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.43.0/min/vs",
@@ -1624,7 +1614,7 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   });
 
-  // === 5. CÁC HÀM TIỆN ÍCH (HELPER) ===
+  // helper functions
   function updateResultPanel(submission) {
     const resultOutput = document.getElementById("result-output");
     if (!resultOutput) return;
@@ -1638,7 +1628,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? "text-blue-400"
         : "text-red-500";
 
-    // Màn hình Loading
+    // loading state
     if (
       status.includes("Compiling") ||
       status.includes("Running") ||
@@ -1652,7 +1642,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Màn hình Lỗi biên dịch (Code sai cú pháp)
+    // compile error
     if (status.includes("Compile Error")) {
       resultOutput.innerHTML = `
                 <div class="p-4">
@@ -1662,14 +1652,13 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Vẽ UI Testcases phong cách VNOI
-    // Vẽ UI Testcases phong cách VNOI
+    // render testcases
     let iconsHtml = "";
     let listHtml = "";
     let totalPoints = 0;
     let maxPoints = 0;
 
-    // --- ĐOẠN MỚI: DỊCH NGƯỢC CHUỖI THÀNH MẢNG JSON ---
+    // parse details
     let parsedDetails = submission.details;
     if (typeof parsedDetails === "string") {
       try {
@@ -1683,7 +1672,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (parsedDetails && Array.isArray(parsedDetails)) {
       parsedDetails.forEach((tc) => {
         const isAC = tc.status === "AC";
-        // Vẽ dấu tick xanh hoặc dấu x đỏ
+        // icon logic
         iconsHtml += isAC
           ? `<span class="text-green-500 font-bold mx-[2px] text-lg">✔</span>`
           : `<span class="text-red-500 font-bold mx-[2px] text-lg">✘</span>`;
@@ -1760,7 +1749,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => toast.classList.add("opacity-0", "translate-y-10"), 3000);
   }
 
-  // === 6. SOCKET.IO (REAL-TIME) ===
+  // socket.io handlers
   const socket = io();
   socket.on("connect", () => {
     connStatus.textContent = "Connected";
@@ -1769,7 +1758,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("contest_action", (data) => {
     if (!app.token) return;
 
-    // So sánh ID người bị đuổi xem có phải là MÌNH không
+    // user check
     const payload = JSON.parse(atob(app.token.split(".")[1]));
     const myUserId = payload.id || payload.userId || payload.userid;
 
@@ -1779,9 +1768,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (app.currentContestId == data.contestId) {
           showToast("🚨 BẠN ĐÃ BỊ ADMIN ĐUỔI KHỎI PHÒNG THI!", "bg-red-600");
-          app.exitContest(true); // Tham số true là ép thoát không hỏi
+          app.exitContest(true);
         } else {
-          app.fetchContests(); // Reset UI nút bấm
+          app.fetchContests();
         }
       } else if (data.action === "reopen") {
         localStorage.removeItem(`finished_contest_${data.contestId}`);
@@ -1807,7 +1796,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   socket.on("admin_camera_frame", (data) => {
-    // Chỉ xử lý nếu Admin đang mở Modal Camera và đúng Contest
     if (app.currentAdminCameraContestId !== data.contestId) return;
 
     const grid = document.getElementById("camera-grid");
@@ -1815,7 +1803,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let userBox = document.getElementById(`cam-user-${data.userId}`);
     
-    // Nếu chưa có ô camera cho User này thì tạo mới
+    // create user box
     if (!userBox) {
       userBox = document.createElement("div");
       userBox.id = `cam-user-${data.userId}`;
@@ -1830,11 +1818,11 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
       grid.appendChild(userBox);
     } else {
-      // Cập nhật frame mới
+      // update frame
       const img = document.getElementById(`cam-img-${data.userId}`);
       if (img) img.src = data.frame;
       
-      // Update nháy để biết camera vẫn sống
+      // pulse effect
       const timeTag = userBox.querySelector(".time-updated");
       if (timeTag) {
         timeTag.textContent = new Date().toLocaleTimeString("vi-VN");
@@ -1855,7 +1843,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // === 6.5. LOGIC TÌM KIẾM BÀI TẬP (SIDEBAR) ===
+  // problem search
   const btnFilterGo = document.getElementById("btn-filter-go");
   const btnFilterRandom = document.getElementById("btn-filter-random");
   const searchInputFilter = document.getElementById("filter-search-text");
@@ -1863,7 +1851,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnFilterGo && searchInputFilter) {
     btnFilterGo.addEventListener("click", () => {
       const query = searchInputFilter.value.toLowerCase().trim();
-      // Lọc ra các bài có tiêu đề hoặc ID chứa từ khóa
       const filtered = app.allProblems.filter(
         (p) =>
           p.title.toLowerCase().includes(query) || p.id.toString() === query,
@@ -1871,7 +1858,6 @@ document.addEventListener("DOMContentLoaded", () => {
       app.renderProblems(filtered);
     });
 
-    // Hỗ trợ bấm Enter trong ô tìm kiếm
     searchInputFilter.addEventListener("keypress", (e) => {
       if (e.key === "Enter") btnFilterGo.click();
     });
@@ -1880,7 +1866,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnFilterRandom) {
     btnFilterRandom.addEventListener("click", () => {
       if (app.allProblems.length > 0) {
-        // Quay sổ xố lấy 1 bài ngẫu nhiên và bay thẳng vào phòng Code
         const randomProblem =
           app.allProblems[Math.floor(Math.random() * app.allProblems.length)];
         app.openProblem(randomProblem);
@@ -1888,14 +1873,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // === 8. QUẢN LÝ ADMIN (MODALS & TABS) ===
+  // admin management
   const tabAdminProbs = document.getElementById("tab-admin-probs");
   const tabAdminContests = document.getElementById("tab-admin-contests");
   const viewAdminProbs = document.getElementById("admin-view-probs");
   const viewAdminContests = document.getElementById("admin-view-contests");
 
-  // chuyen tab
-  // Logic chuyển 3 Tab Admin
   const adminTabs = ["probs", "contests", "users"];
   adminTabs.forEach((tab) => {
     const btn = document.getElementById(`tab-admin-${tab}`);
@@ -1913,11 +1896,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Gắn thêm các hàm Quản lý Bài Tập vào `window.app`
   Object.assign(window.app, {
     adminAllProblems: [],
 
-    // Load danh sách vào Bảng Admin
     fetchAdminProblems: async function () {
       if (this.role !== "ADMIN") return;
       try {
@@ -1962,7 +1943,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // API Ẩn/Hiện bài
     toggleProblem: async function (id) {
       try {
         const res = await fetch(`/api/admin/problems/${id}/toggle`, {
@@ -1976,14 +1956,14 @@ document.addEventListener("DOMContentLoaded", () => {
             data.isPublic ? "bg-green-500" : "bg-gray-600",
           );
           this.fetchAdminProblems();
-          this.fetchProblems(); // Cập nhật cả list ngoài
+          this.fetchProblems();
         }
       } catch (e) {
         showToast("Lỗi kết nối", "bg-red-500");
       }
     },
 
-    // Mở Modal Bài Tập (Dùng chung cho Tạo Mới & Sửa)
+    // problem modal
     openProbModal: function (id = null) {
       const modal = document.getElementById("modal-problem");
       document.getElementById("admin-prob-id").value = id || "";
@@ -2001,7 +1981,6 @@ document.addEventListener("DOMContentLoaded", () => {
           document.getElementById("admin-prob-desc").value = p.description;
         }
       } else {
-        // Reset form rỗng với giá trị mặc định
         document.getElementById("admin-prob-name").value = "";
         document.getElementById("admin-prob-time").value = 1000;
         document.getElementById("admin-prob-mem").value = 256000;
@@ -2012,7 +1991,7 @@ document.addEventListener("DOMContentLoaded", () => {
       modal.classList.add("flex");
     },
 
-    // Mở Modal Testcase
+    // testcase modal
     openTcModal: function (id) {
       const p = this.adminAllProblems.find((x) => x.id === id);
       if (!p) return;
@@ -2024,17 +2003,16 @@ document.addEventListener("DOMContentLoaded", () => {
       modal.classList.remove("hidden");
       modal.classList.add("flex");
 
-      // Gọi API quét file
+      // fetch files
       this.fetchTestcases(id);
     },
   });
 
-  // Bắt sự kiện bấm nút Tạo Bài Tập
+  // event listeners
   document
     .getElementById("btn-show-add-prob")
     ?.addEventListener("click", () => app.openProbModal());
 
-  // Submit form Lưu Bài Tập (Tạo mới)
   document
     .getElementById("btn-save-prob")
     ?.addEventListener("click", async () => {
@@ -2078,7 +2056,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-  // Nút Upload Testcase
   document
     .getElementById("btn-save-testcase")
     ?.addEventListener("click", async () => {
@@ -2112,7 +2089,6 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("btn-save-testcase").textContent = "Upload";
     });
 
-  // Nút Lưu Kỳ Thi (Thêm Mới / Cập Nhật)
   document
     .getElementById("btn-save-contest")
     ?.addEventListener("click", async () => {
@@ -2168,7 +2144,6 @@ document.addEventListener("DOMContentLoaded", () => {
     .getElementById("btn-show-add-contest")
     ?.addEventListener("click", () => app.openContestModal());
 
-  // Cập nhật User
   document
     .getElementById("btn-save-user")
     ?.addEventListener("click", async () => {
@@ -2196,7 +2171,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-  // Sự kiện Nút Lưu Mật Khẩu Mới
   document
     .getElementById("btn-save-pwd")
     ?.addEventListener("click", async () => {
@@ -2224,7 +2198,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-  // Xử lý Upload CSV hàng loạt
+  // bulk upload
   document
     .getElementById("admin-csv-file")
     ?.addEventListener("change", function (e) {
@@ -2234,7 +2208,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const reader = new FileReader();
       reader.onload = async function (event) {
         const text = event.target.result;
-        // Tách dòng, xóa khoảng trắng, lọc bỏ dòng trống
         const usernames = text
           .split(/\r?\n/)
           .map((line) => line.trim())
@@ -2247,7 +2220,7 @@ document.addEventListener("DOMContentLoaded", () => {
             `Tìm thấy ${usernames.length} tài khoản trong file. Bạn muốn tạo tất cả với mật khẩu mặc định "123456"?`,
           )
         ) {
-          e.target.value = ""; // Reset input
+          e.target.value = "";
           return;
         }
 
@@ -2273,12 +2246,12 @@ document.addEventListener("DOMContentLoaded", () => {
           showToast(err.message, "bg-red-500");
         }
 
-        e.target.value = ""; // Reset input
+        e.target.value = "";
       };
       reader.readAsText(file);
     });
 
-  // Chức năng Copy Code trong màn hình Replay
+  // copy code
   document.getElementById("btn-copy-code")?.addEventListener("click", () => {
     const code = document.getElementById("replay-code-content").value;
     navigator.clipboard
@@ -2289,7 +2262,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .catch(() => showToast("Lỗi copy!", "bg-red-500"));
   });
 
-  // === 7. KHỞI TẠO DỮ LIỆU BAN ĐẦU ===
+  // init app
   app.updateNavAuth();
   app.switchTab(app.token ? "problems-list-view" : "auth-view");
   app.fetchProblems();

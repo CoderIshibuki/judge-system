@@ -21,11 +21,11 @@ const io = new Server(httpServer, {
 
 io.on("connection", (socket) => {
   socket.on("camera_frame", (data) => {
-    // data should contain { contestId, userId, username, frame }
-    // Broadcast to admins
+    // api camera
     io.emit("admin_camera_frame", data);
   });
 });
+
 
 
 const prisma = new PrismaClient().$extends({
@@ -50,7 +50,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-key";
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend files from the public folder
+// static files
 app.use(express.static(path.join(__dirname, "public")));
 
 app.post("/register", async (req, res) => {
@@ -168,7 +168,7 @@ app.post(
   },
 );
 
-// Lấy TẤT CẢ bài tập cho Admin Dashboard (Bao gồm cả bài đang ẩn)
+// admin problems
 app.get(
   "/api/admin/problems",
   authenticateToken,
@@ -214,7 +214,7 @@ app.post(
   },
 );
 
-// SỬA BÀI TẬP (Cập nhật)
+// update problem
 app.put(
   "/api/problems/:id",
   authenticateToken,
@@ -240,7 +240,7 @@ app.put(
   },
 );
 
-// LẤY DANH SÁCH CONTEST CHO ADMIN (Lấy kèm danh sách ID bài tập bên trong)
+// admin contests
 app.get(
   "/api/admin/contests",
   authenticateToken,
@@ -258,7 +258,7 @@ app.get(
   },
 );
 
-// SỬA KỲ THI
+// edit contest
 app.put(
   "/api/admin/contests/:id",
   authenticateToken,
@@ -290,7 +290,7 @@ app.put(
   },
 );
 
-// XÓA KỲ THI
+// delete contest
 app.delete(
   "/api/admin/contests/:id",
   authenticateToken,
@@ -305,7 +305,7 @@ app.delete(
   },
 );
 
-// LẤY DANH SÁCH FILE TESTCASE (Đọc từ ổ cứng)
+// fetch testcases
 app.get(
   "/api/admin/problems/:id/testcases",
   authenticateToken,
@@ -351,7 +351,7 @@ app.get(
   },
 );
 
-// LẤY DANH SÁCH USER
+// fetch users
 app.get(
   "/api/admin/users",
   authenticateToken,
@@ -369,7 +369,7 @@ app.get(
   },
 );
 
-// CẬP NHẬT USER (Role & Mật khẩu)
+// update user
 app.put(
   "/api/admin/users/:id",
   authenticateToken,
@@ -379,7 +379,7 @@ app.put(
       const { role, password } = req.body;
       const dataToUpdate: any = { role };
 
-      // Nếu Admin có nhập pass mới thì mới đổi, không thì giữ nguyên
+
       if (password && password.trim() !== "") {
         dataToUpdate.passwordHash = await bcrypt.hash(password, 10);
       }
@@ -396,7 +396,7 @@ app.put(
   },
 );
 
-// [API CHO ADMIN] THÊM HÀNG LOẠT USER TỪ FILE
+// bulk users
 app.post(
   "/api/admin/users/bulk",
   authenticateToken,
@@ -407,10 +407,7 @@ app.post(
       if (!usernames || !Array.isArray(usernames))
         return res.status(400).json({ error: "Dữ liệu không hợp lệ" });
 
-      // Tạo sẵn mã băm cho mật khẩu "123456"
       const defaultPasswordHash = await bcrypt.hash("123456", 10);
-
-      // Kiểm tra xem user nào đã tồn tại để bỏ qua (SQLite không hỗ trợ skipDuplicates)
       const existingUsers = await prisma.user.findMany({
         where: { username: { in: usernames } },
       });
@@ -441,14 +438,14 @@ app.post(
   },
 );
 
-// [API CHO USER] ĐỔI MẬT KHẨU CÁ NHÂN
+// change password
 app.put(
   "/api/users/password",
   authenticateToken,
   async (req: any, res: any) => {
     try {
       const { oldPassword, newPassword } = req.body;
-      // req.user.userId được giải mã từ JWT Token
+
       const user = await prisma.user.findUnique({
         where: { id: req.user.userId },
       });
@@ -471,7 +468,7 @@ app.put(
   },
 );
 
-// XÓA USER
+// delete user
 app.delete(
   "/api/admin/users/:id",
   authenticateToken,
@@ -479,7 +476,6 @@ app.delete(
   async (req: any, res: any) => {
     try {
       const id = parseInt(req.params.id);
-      // Xóa sạch bài nộp của User này trước để tránh lỗi dữ liệu
       await prisma.submission.deleteMany({ where: { userId: id } });
       await prisma.user.delete({ where: { id } });
       res.json({ success: true });
@@ -489,7 +485,7 @@ app.delete(
   },
 );
 
-// LẤY SOURCE CODE CỦA BÀI NỘP (REPLAY)
+// submission source
 app.get(
   "/api/submissions/:id/source",
   authenticateToken,
@@ -504,17 +500,17 @@ app.get(
       if (!submission)
         return res.status(404).json({ error: "Không tìm thấy bài nộp" });
 
-      // 1. Mặc định: Admin hoặc chính chủ nộp thì được xem luôn
+
       let canView =
         req.user.role === "ADMIN" || submission.userId === req.user.userId;
 
-      // 2. Nếu là người khác xem: Phải kiểm tra xem người xem đã AC bài này chưa
+
       if (!canView) {
         const hasAC = await prisma.submission.findFirst({
           where: {
             userId: req.user.userId,
             problemId: submission.problemId,
-            status: { contains: "AC" }, // Chứa chữ AC (Accepted)
+            status: { contains: "AC" }, 
           },
         });
         if (hasAC) canView = true;
@@ -542,7 +538,7 @@ app.get(
   },
 );
 
-// XÓA tétcase
+// delete testcase
 app.delete(
   "/api/admin/problems/:id/testcases/:name",
   authenticateToken,
@@ -569,7 +565,7 @@ app.delete(
   },
 );
 
-// Chuyển đổi trạng thái Ẩn/Hiện của bài tập (Public/Hidden)
+// toggle problem
 app.post(
   "/api/admin/problems/:id/toggle",
   authenticateToken,
@@ -596,7 +592,7 @@ app.post(
   },
 );
 
-// ĐỌC NỘI DUNG FILE TESTCASE
+// read testcase
 app.get(
   "/api/admin/problems/:id/testcases/:name/:ext",
   authenticateToken,
@@ -617,9 +613,9 @@ app.get(
       if (!fs.existsSync(filePath))
         return res.status(404).json({ error: "File không tồn tại" });
 
-      // Giới hạn đọc 100KB đầu tiên để tránh treo trình duyệt nếu output quá to
+
       const stats = fs.statSync(filePath);
-      const MAX_SIZE = 100 * 1024; // 100KB
+      const MAX_SIZE = 100 * 1024; 
       let content = "";
 
       if (stats.size > MAX_SIZE) {
@@ -654,7 +650,6 @@ app.post(
         return res.status(400).json({ error: "Thiếu thông tin bắt buộc" });
       }
 
-      // Chuyển mảng [1, 3, 5] thành cấu trúc Prisma yêu cầu
       const connectProblems =
         problemIds && problemIds.length > 0
           ? problemIds.map((id: number) => ({ id: Number(id) }))
@@ -687,7 +682,7 @@ app.post(
   async (req: any, res: any) => {
     try {
       const problemId = parseInt(req.params.id);
-      const { testcases } = req.body; // Array of { name: "1.in", content: "..." }
+      const { testcases } = req.body; 
 
       if (
         !problemId ||
@@ -763,10 +758,10 @@ app.post("/submit", authenticateToken, async (req: any, res: any) => {
   try {
     const { problemId, sourceCode, language, contestId } = req.body;
 
-    // 1. LẤY USER ID TỪ MIDDLEWARE authenticateToken (đã xác thực ở trên)
+    // get userid
     const userId = req.user?.userId || req.user?.id || null;
 
-    // 2. KIỂM TRA HẾT GIỜ CONTEST (Từ chối bài nộp muộn)
+    // deadline check
     if (contestId) {
       const contest = await prisma.contest.findUnique({
         where: { id: Number(contestId) },
@@ -784,7 +779,7 @@ app.post("/submit", authenticateToken, async (req: any, res: any) => {
       }
     }
 
-    // 3. LƯU VÀO DATABASE
+    // db save
     const submission = await prisma.submission.create({
       data: {
         code: sourceCode,
@@ -796,7 +791,7 @@ app.post("/submit", authenticateToken, async (req: any, res: any) => {
       },
     });
 
-    // 4. TẠO FILE RA Ổ CỨNG CHO DOCKER ĐỌC (Diệt lỗi: No such file)
+    // judge file
     const fileExtension = language === "python" ? "py" : "cpp";
     const filePath = path.join(
       __dirname,
@@ -804,7 +799,6 @@ app.post("/submit", authenticateToken, async (req: any, res: any) => {
     );
     fs.writeFileSync(filePath, sourceCode);
 
-    // 5. TRẢ DỮ LIỆU ĐẦY ĐỦ VỀ CHO GIAO DIỆN HIỂN THỊ
     const fullSubmission = await prisma.submission.findUnique({
       where: { id: submission.id },
       include: { user: true, problem: true },
@@ -816,7 +810,6 @@ app.post("/submit", authenticateToken, async (req: any, res: any) => {
       submission: fullSubmission,
     });
 
-    // 6. GỌI HÀM CHẤM BÀI
     judgeSubmission(submission.id);
   } catch (error) {
     console.error("Lỗi nộp bài:", error);
@@ -826,9 +819,7 @@ app.post("/submit", authenticateToken, async (req: any, res: any) => {
   }
 });
 
-// =================== TÍNH NĂNG MỚI BỔ SUNG ===================
-
-// 1. [ADMIN] XÓA VĨNH VIỄN 1 BÀI NỘP (SUBMISSION)
+// delete submission
 app.delete(
   "/api/admin/submissions/:id",
   authenticateToken,
@@ -845,7 +836,7 @@ app.delete(
   },
 );
 
-// 2. [ADMIN] LẤY DANH SÁCH THÍ SINH ĐÃ VÀO 1 KỲ THI
+// contest participants
 app.get(
   "/api/admin/contests/:id/participants",
   authenticateToken,
@@ -863,7 +854,7 @@ app.get(
   },
 );
 
-// 3. [ADMIN] LỆNH ĐUỔI HOẶC MỞ LẠI CHO THÍ SINH (Phát sóng qua Socket.io)
+// contest action
 app.post(
   "/api/admin/contests/:id/user-action",
   authenticateToken,
@@ -871,9 +862,8 @@ app.post(
   async (req: any, res: any) => {
     try {
       const contestId = parseInt(req.params.id);
-      const { userId, action } = req.body; // action: 'kick' hoặc 'reopen'
+      const { userId, action } = req.body;
 
-      // Phát tín hiệu ra toàn mạng lưới để trình duyệt của thí sinh kia tự động nhận lệnh
       io.emit("contest_action", {
         contestId,
         userId: parseInt(userId),
@@ -886,10 +876,8 @@ app.post(
     }
   },
 );
-// =============================================================
 
 async function judgeSubmission(submissionId: number): Promise<void> {
-  // Fetch submission to get problemId and related info
   let submissionRecord: any = null;
   try {
     submissionRecord = await prisma.submission.findUnique({
@@ -899,7 +887,7 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     console.error("Failed to fetch submission record:", e);
   }
 
-  const language = submissionRecord?.language || "cpp"; // Default to cpp
+  const language = submissionRecord?.language || "cpp";
   const isPython = language === "python";
 
   const fileName = `submission_${submissionId}.${isPython ? "py" : "cpp"}`;
@@ -920,7 +908,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     return;
   }
 
-  // Get time limit and memory limit from Problem if available
   let timeLimitMs = 1000;
   let memoryLimitKb = 256000;
   let problemPoints = 100;
@@ -949,7 +936,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
 
   const projectRoot = process.cwd();
 
-  // helper to run docker commands and capture output + timeout
   const runDocker = (
     args: string[],
     input?: string,
@@ -1010,7 +996,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     });
   };
 
-  // Compile inside Docker (mount project root to /app and run in /app)
   if (!isPython) {
     const compileArgs = [
       "run",
@@ -1051,7 +1036,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     console.error("Failed to set status Running:", err);
   }
 
-  // Locate testcases directory (try plural and singular folder names)
   const candidates = [
     path.join(projectRoot, "problems", String(problemId), "testcases"),
     path.join(projectRoot, "problem", String(problemId), "testcases"),
@@ -1087,7 +1071,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     }
   }
 
-  // Helper to cleanup generated files
   const cleanup = () => {
     try {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -1098,7 +1081,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     } catch (e) {}
   };
 
-  // Track max time and memory across tests
   let maxTimeMs = 0;
   let maxMemoryKb = 0;
   let totalScore = 0;
@@ -1116,7 +1098,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
       const s = raw.trim();
       if (!s) continue;
 
-      // Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.01
       const mElapsed = s.match(/Elapsed.*time.*:\s*(.+)$/i);
       if (mElapsed) {
         const tstr = mElapsed[1].trim();
@@ -1137,7 +1118,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
         if (!Number.isNaN(seconds)) timeMs = Math.round(seconds * 1000);
       }
 
-      // User time (seconds): 0.01
       const mUser = s.match(/User time \(seconds\):\s*([0-9.]+)/i);
       if (mUser) {
         const secs = parseFloat(mUser[1]);
@@ -1145,7 +1125,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
           timeMs = Math.max(timeMs || 0, Math.round(secs * 1000));
       }
 
-      // Maximum resident set size (kbytes): 12345
       const mMem =
         s.match(/Maximum resident set size .*:\s*([0-9]+)/i) ||
         s.match(/Maximum resident set size \(kbytes\):\s*([0-9]+)/i);
@@ -1157,7 +1136,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     return { timeMs, memoryKb };
   }
 
-  // Run each testcase inside Docker
   for (let i = 0; i < inFiles.length; ++i) {
     const inFile = inFiles[i];
     let inPath: string;
@@ -1206,19 +1184,9 @@ async function judgeSubmission(submissionId: number): Promise<void> {
     });
 
     const testNum = i + 1;
-    // Log raw outputs to help debug whitespace/newline issues
     const userOutputRaw = runRes.stdout || "";
     const expectedRaw = expectedData || "";
-    console.log(
-      "Test Case:",
-      inFile,
-      "User Output:",
-      [userOutputRaw],
-      "Expected:",
-      [expectedRaw],
-    );
 
-    // parse time & memory from stderr (time -v output is written to stderr)
     const parsedUsage = parseTimeAndMemory(runRes.stderr || "");
     if (parsedUsage.timeMs) maxTimeMs = Math.max(maxTimeMs, parsedUsage.timeMs);
     if (parsedUsage.memoryKb)
@@ -1281,7 +1249,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
       return;
     }
 
-    // Compare trimmed outputs to ignore leading/trailing whitespace differences
     const outTrim = userOutputRaw.trim();
     const expTrim = expectedRaw.trim();
     if (outTrim !== expTrim) {
@@ -1312,7 +1279,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
       return;
     }
 
-    // Passed testcase, add points
     totalScore += pointsPerTest;
     testcaseResults.push({
       id: testNum,
@@ -1322,7 +1288,6 @@ async function judgeSubmission(submissionId: number): Promise<void> {
       points: pointsPerTest,
     });
   }
-  // All tests passed
   try {
     await prisma.submission.update({
       where: { id: submissionId },
@@ -1393,7 +1358,7 @@ app.get("/api/leaderboard", async (req, res) => {
           points: totalPoints,
         };
       })
-      .sort((a, b) => b.points - a.points || b.solvedCount - a.solvedCount); // Ưu tiên điểm, sau đó tới số bài
+      .sort((a, b) => b.points - a.points || b.solvedCount - a.solvedCount);
 
     res.json({ success: true, leaderboard });
   } catch (error) {
@@ -1402,7 +1367,6 @@ app.get("/api/leaderboard", async (req, res) => {
   }
 });
 
-// Return list of problems for the frontend dropdown
 app.get("/problems", async (_req, res) => {
   try {
     const problems = await prisma.problem.findMany({
@@ -1423,11 +1387,7 @@ app.get("/problems", async (_req, res) => {
   }
 });
 
-// =====================================================================
-// KHU VỰC API VỪA THÊM (CHỈ ĐỂ DUY NHẤT 1 BẢN NÀY, KHÔNG ĐỂ TRÙNG LẶP)
-// =====================================================================
-
-// 1. [API ADMIN] SỬA ĐIỂM BÀI NỘP THỦ CÔNG
+// manual score
 app.put(
   "/api/admin/submissions/:id/score",
   authenticateToken,
@@ -1448,7 +1408,7 @@ app.put(
   },
 );
 
-// 2. [API] THÍ SINH QUẸT THẺ GHI DANH VÀO PHÒNG THI
+// join contest
 app.post(
   "/api/contests/:id/join",
   authenticateToken,
@@ -1469,7 +1429,7 @@ app.post(
   },
 );
 
-// 3. [API] LẤY CHI TIẾT MỘT BÀI TẬP ĐỂ HIỂN THỊ LÚC LÀM BÀI
+// problem detail
 app.get("/api/problems/:id", authenticateToken, async (req: any, res: any) => {
   try {
     const problemId = parseInt(req.params.id);
@@ -1486,7 +1446,7 @@ app.get("/api/problems/:id", authenticateToken, async (req: any, res: any) => {
   }
 });
 
-// 4. [API] LẤY LIVE SCOREBOARD CỦA KỲ THI
+// contest scoreboard
 app.get("/api/contests/:id/scoreboard", async (req: any, res: any) => {
   try {
     const contestId = parseInt(req.params.id);
@@ -1562,7 +1522,7 @@ app.get("/api/contests/:id/scoreboard", async (req: any, res: any) => {
   }
 });
 
-// [API] LẤY DANH SÁCH BÀI TẬP CỦA MỘT KỲ THI
+// contest problems
 app.get(
   "/api/contests/:id/problems",
   authenticateToken,
@@ -1584,7 +1544,7 @@ app.get(
     }
   },
 );
-// [API ADMIN] XÓA BÀI TẬP
+// delete problem
 app.delete(
   "/api/admin/problems/:id",
   authenticateToken,
@@ -1593,7 +1553,6 @@ app.delete(
     try {
       const id = parseInt(req.params.id);
 
-      // Xóa các Submissions liên quan trước để tránh lỗi Khóa ngoại
       await prisma.submission.deleteMany({ where: { problemId: id } });
       await prisma.problem.delete({ where: { id } });
 
@@ -1614,7 +1573,7 @@ app.delete(
   },
 );
 
-// [API] XÁC THỰC MẬT KHẨU PHÒNG THI (Server-side)
+// pass phong thi
 app.post(
   "/api/contests/:id/verify-password",
   authenticateToken,
@@ -1631,12 +1590,10 @@ app.post(
         return res.status(404).json({ success: false, error: "Không tìm thấy kỳ thi" });
       }
 
-      // Nếu contest không có password thì cho vào luôn
       if (!contest.password || contest.password.trim() === "") {
         return res.json({ success: true });
       }
 
-      // So sánh password
       if (password === contest.password) {
         return res.json({ success: true });
       } else {
@@ -1653,10 +1610,9 @@ app.post(
 app.get("/api/contests", async (_req, res) => {
   try {
     const contests = await prisma.contest.findMany({
-      orderBy: { startTime: "desc" }, // Sắp xếp kỳ thi mới nhất lên đầu
+      orderBy: { startTime: "desc" }, 
     });
 
-    // 🌟 BẢO MẬT: Giấu mật khẩu, chỉ trả về cờ isPrivate
     const formattedContests = contests.map((c) => {
       return {
         id: c.id,

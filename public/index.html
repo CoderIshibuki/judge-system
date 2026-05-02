@@ -24,7 +24,7 @@
   <body
     class="h-screen flex flex-col bg-gray-900 text-gray-200 overflow-hidden font-sans"
   >
-    <!-- VNOI-Style Navbar -->
+    <!-- navbar -->
     <header
       class="bg-black border-b border-gray-700 p-0 flex justify-between items-center shrink-0 text-sm font-semibold tracking-wide"
     >
@@ -83,7 +83,7 @@
             Login / Register
           </button>
         </div>
-        <!-- Khối User Nav chuẩn -->
+        <!-- user nav -->
         <div id="user-nav-section" class="hidden flex items-center space-x-3">
           <span id="nav-greeting" class="text-gray-300"></span>
           <button
@@ -109,9 +109,9 @@
       </div>
     </header>
 
-    <!-- MAIN CONTENT AREA -->
+    <!-- main content -->
     <main class="flex-1 overflow-hidden relative">
-      <!-- 1. AUTHENTICATION VIEW -->
+      <!-- auth view -->
       <div
         id="auth-view"
         class="view-section hidden w-full h-full flex items-center justify-center bg-gray-900 absolute inset-0 z-10"
@@ -161,12 +161,12 @@
         </div>
       </div>
 
-      <!-- 2.1. PROBLEMS LIST VIEW (Danh sách bài tập) -->
+      <!-- problems list -->
       <div
         id="problems-list-view"
         class="view-section hidden w-full h-full flex p-6 bg-gray-900 overflow-hidden gap-6"
       >
-        <!-- Cột Danh sách (Bên trái) -->
+        <!-- list column -->
         <div class="flex-1 flex flex-col min-w-0">
           <h2
             class="text-2xl font-bold mb-4 text-white border-b border-gray-700 pb-2 shrink-0"
@@ -194,13 +194,13 @@
                 id="problems-table-body"
                 class="text-sm divide-y divide-gray-700 bg-gray-800 font-medium text-gray-300"
               >
-                <!-- Code JS sẽ vẽ danh sách bài vào đây -->
+                <!-- problems data -->
               </tbody>
             </table>
           </div>
         </div>
 
-        <!-- Cột Filter/Search  -->
+        <!-- filter column -->
         <div class="w-72 shrink-0 flex flex-col overflow-y-auto">
           <div class="bg-gray-800 rounded-lg border border-gray-700 shadow-xl">
             <!-- Header -->
@@ -224,7 +224,7 @@
                 ></path>
               </svg>
             </div>
-            <!-- Body -->
+            <!-- filter body -->
             <div class="p-4 space-y-4 text-sm text-gray-300">
               <input
                 type="text"
@@ -315,7 +315,7 @@
                 </div>
               </div>
 
-              <!-- Các nút bấm -->
+              <!-- filter buttons -->
               <div
                 class="flex justify-end space-x-2 pt-4 border-t border-gray-700 mt-2"
               >
@@ -337,9 +337,9 @@
         </div>
       </div>
 
-      <!-- 2.2. EDITOR VIEW-->
+      <!-- editor view -->
       <div id="editor-view" class="view-section hidden w-full h-full flex">
-        <!-- Sidebar (Đề bài) -->
+        <!-- sidebar -->
         <div class="w-1/4 flex flex-col border-r border-gray-700 bg-gray-900">
           <div
             class="p-3 border-b border-gray-700 shrink-0 bg-gray-800 flex items-center justify-between"
@@ -385,7 +385,7 @@
             </div>
           </div>
         </div>
-        <!-- Editor -->
+        <!-- editor -->
         <div class="flex-1 flex flex-col min-w-0 bg-gray-900">
           <div
             class="bg-gray-800 p-2 border-b border-gray-700 flex justify-between items-center shrink-0"
@@ -416,7 +416,7 @@
             </button>
           </div>
         </div>
-        <!-- Result Panel -->
+        <!-- result panel -->
         <div
           class="w-1/4 bg-gray-900 border-l border-gray-700 flex flex-col shrink-0"
         >
@@ -433,7 +433,7 @@
         </div>
       </div>
 
-      <!-- 3. SUBMISSIONS VIEW -->
+      <!-- submissions view -->
       <div
         id="submissions-view"
         class="view-section hidden w-full h-full flex flex-col p-6 bg-gray-900 overflow-hidden"
@@ -479,13 +479,13 @@
               id="submissions-list"
               class="text-sm divide-y divide-gray-700 bg-gray-800"
             >
-              <!-- Code JS sẽ bơm dữ liệu vào đây -->
+              <!-- submissions data -->
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- 4. USERS VIEW -->
+      <!-- users view -->
       <div
         id="users-view"
         class="view-section hidden w-full h-full flex flex-col p-6 bg-gray-900 overflow-hidden"
@@ -534,13 +534,13 @@
               id="leaderboard-list"
               class="text-sm divide-y divide-gray-700 bg-gray-800 font-medium text-gray-300"
             >
-              <!-- Code JS sẽ bơm dữ liệu vào đây -->
+              <!-- users data -->
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- 5. CONTESTS VIEW -->
+      <!-- contests view -->
       <div
         id="contests-view"
         class="view-section hidden w-full h-full flex flex-col p-6 bg-gray-900 overflow-hidden"
@@ -605,12 +605,12 @@
         </div>
       </div>
 
-      <!-- 6. ADMIN DASHBOARD (Lột xác) -->
+      <!-- admin dashboard -->
       <div
         id="admin-dashboard"
         class="view-section hidden w-full h-full flex flex-col bg-gray-900"
       >
-        <!-- Admin Navbar -->
+        <!-- admin navbar -->
         <div
           class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center shrink-0"
         >
@@ -641,7 +641,7 @@
           </div>
         </div>
 
-        <!-- Tab 1: Quản lý Bài Tập -->
+        <!-- tab problems -->
         <div
           id="admin-view-probs"
           class="flex-1 p-6 overflow-hidden flex flex-col"
@@ -688,7 +688,7 @@
                 id="admin-probs-list"
                 class="text-sm divide-y divide-gray-700 bg-gray-800"
               >
-                <!-- JS sẽ render bảng quản lý bài tập vào đây -->
+                <!-- admin problems data -->
                 <tr class="hover:bg-gray-700/50 transition-colors">
                   <td class="p-3 text-center text-gray-400">1</td>
                   <td class="p-3 text-blue-400 font-semibold">A + B</td>
@@ -721,7 +721,7 @@
           </div>
         </div>
 
-        <!-- Tab 2: Quản lý Kỳ Thi -->
+        <!-- tab contests -->
         <div
           id="admin-view-contests"
           class="hidden flex-1 p-6 overflow-hidden flex flex-col"
@@ -768,12 +768,12 @@
                 id="admin-contests-list"
                 class="text-sm divide-y divide-gray-700 bg-gray-800"
               >
-                <!-- JS sẽ render bảng quản lý kỳ thi vào đây -->
+                <!-- admin contests data -->
               </tbody>
             </table>
           </div>
         </div>
-        <!-- Tab 3: Quản lý User -->
+        <!-- tab users -->
         <div
           id="admin-view-users"
           class="hidden flex-1 p-6 overflow-hidden flex flex-col"
@@ -952,7 +952,7 @@
       </div>
     </div>
 
-    <!-- 2. Modal Quản lý Testcase -->
+    <!-- modal qly tscs -->
     <div
       id="modal-testcase"
       class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 transition-opacity"
@@ -991,7 +991,7 @@
         <div class="p-6 overflow-y-auto flex-1 space-y-6">
           <input type="hidden" id="admin-tc-prob-id" />
 
-          <!-- Bảng danh sách testcase hiện tại -->
+          <!-- ds tscs htai -->
           <div>
             <h4 class="text-sm font-semibold text-gray-300 mb-2">
               Các Testcase đang có trên Server
@@ -1013,13 +1013,13 @@
                   </tr>
                 </thead>
                 <tbody id="admin-tc-list" class="divide-y divide-gray-800">
-                  <!-- JS sẽ render file vào đây -->
+                  <!-- ds tscs -->
                 </tbody>
               </table>
             </div>
           </div>
 
-          <!-- Khu vực Upload testcase mới -->
+          <!-- zone upload new tc -->
           <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
             <h4 class="text-sm font-semibold text-gray-300 mb-2">
               Thêm Testcase mới
@@ -1045,7 +1045,7 @@
         </div>
       </div>
     </div>
-    <!-- 3. Modal Tạo/Sửa Kỳ Thi (Contest) -->
+    <!-- modal tạo kỳ thi -->
     <div
       id="modal-contest"
       class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 transition-opacity"
@@ -1142,7 +1142,7 @@
               />
             </div>
           </div>
-          <!-- Tùy chọn Camera chống gian lận -->
+          <!-- t/c cam -->
           <div class="flex items-center space-x-3 mt-2 bg-gray-700/30 p-3 rounded-lg border border-gray-600">
             <input
               type="checkbox"
@@ -1178,7 +1178,7 @@
       </div>
     </div>
 
-    <!-- 4. Modal Xem Nội Dung File Testcase -->
+    <!-- modal view file tscs -->
     <div
       id="modal-view-file"
       class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[60] transition-opacity"
@@ -1231,7 +1231,7 @@
           </button>
         </div>
         <div class="p-0 flex-1 overflow-hidden flex flex-col">
-          <!-- Textarea readonly để hiện code -->
+          <!-- readonly textarea to show code --> 
           <textarea
             id="modal-view-file-content"
             readonly
@@ -1253,7 +1253,7 @@
       </div>
     </div>
 
-    <!-- 5. Modal Sửa User -->
+    <!-- modal edit user -->
     <div
       id="modal-user"
       class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 transition-opacity"
@@ -1336,7 +1336,7 @@
       </div>
     </div>
 
-    <!-- 6. Modal Đổi Mật Khẩu Cá Nhân -->
+    <!-- modal change password -->
     <div
       id="modal-change-pwd"
       class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[70] transition-opacity"
@@ -1400,7 +1400,7 @@
       </div>
     </div>
 
-    <!-- Màn hình chờ thi (Lockdown) -->
+    <!-- screen chờ thi -->
     <div
       id="contest-lobby-screen"
       class="fixed inset-0 bg-[#0d1117] z-[100] hidden flex-col items-center justify-center text-white"
@@ -1439,7 +1439,7 @@
       </div>
     </div>
 
-    <!-- Modal Xem Lại Code (Replay) -->
+    <!-- modal xem lại code -->
     <div
       id="modal-replay"
       class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[80] transition-opacity"
@@ -1508,7 +1508,7 @@
       </div>
     </div>
 
-    <!-- Modal Thêm User Thủ Công -->
+    <!-- modal add user -->
     <div
       id="modal-add-user"
       class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[80] transition-opacity"
@@ -1572,7 +1572,7 @@
       </div>
     </div>
 
-    <!-- Modal Live Scoreboard -->
+    <!-- modal scoreboard -->
     <div
       id="modal-scoreboard"
       class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[90] transition-opacity p-4"
@@ -1580,7 +1580,6 @@
       <div
         class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-6xl shadow-2xl flex flex-col h-[85vh]"
       >
-        <!-- Header -->
         <div
           class="p-4 border-b border-gray-700 flex justify-between items-center shrink-0 bg-black rounded-t-lg"
         >
@@ -1650,27 +1649,24 @@
           </div>
         </div>
 
-        <!-- Table Body -->
         <div class="p-0 flex-1 overflow-auto bg-[#0d1117]">
           <table class="w-full text-left border-collapse whitespace-nowrap">
             <thead
               class="bg-gray-900 border-b border-gray-700 text-gray-300 text-sm sticky top-0 z-10 shadow-lg"
               id="scoreboard-head"
             >
-              <!-- JS sẽ vẽ các cột (Bài 1, Bài 2...) vào đây -->
             </thead>
             <tbody
               id="scoreboard-body"
               class="text-sm divide-y divide-gray-800 font-medium"
             >
-              <!-- JS sẽ xếp hạng thí sinh vào đây -->
             </tbody>
           </table>
         </div>
       </div>
     </div>
 
-    <!-- Modal Quản Lý Thí Sinh Trong Phòng Thi -->
+    <!-- modal qly ts trong phòng thi -->
     <div
       id="modal-contest-users"
       class="fixed inset-0 bg-black/90 hidden items-center justify-center z-[80] transition-opacity"
@@ -1725,14 +1721,13 @@
               id="admin-contest-users-list"
               class="text-sm divide-y divide-gray-800 font-medium"
             >
-              <!-- Data đổ vào đây -->
             </tbody>
           </table>
         </div>
       </div>
     </div>
 
-    <!-- Modal Giám sát Camera -->
+    <!-- modal giám sát cam -->
     <div
       id="modal-camera-monitor"
       class="fixed inset-0 bg-black/95 hidden items-center justify-center z-[90] transition-opacity"
@@ -1772,24 +1767,22 @@
           </button>
         </div>
         <div class="p-4 flex-1 overflow-auto">
-          <!-- Grid chứa các camera -->
           <div
             id="camera-grid"
             class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
           >
-            <!-- JS sẽ thêm các khung camera vào đây -->
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Toast Notification -->
+    <!-- toast -->
     <div
       id="toast"
       class="fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 opacity-0 translate-y-10 z-50 text-sm font-medium"
     ></div>
 
-    <!-- 📷 CAMERA PiP (Chống gian lận) — Ẩn mặc định -->
+    <!-- camera -->
     <div
       id="camera-pip"
       class="fixed bottom-20 right-4 z-[100] hidden flex-col items-end"
@@ -1811,7 +1804,6 @@
           style="transform: scaleX(-1);"
         ></video>
       </div>
-      <!-- Cảnh báo mất camera -->
       <div
         id="camera-warning"
         class="hidden mt-2 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg animate-pulse shadow-lg"

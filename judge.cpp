@@ -15,7 +15,7 @@
 
 namespace fs = std::filesystem;
 
-// Helper: trim whitespace from both ends
+// trim whitespace
 static std::string trim(const std::string &s) {
     size_t start = 0;
     while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
@@ -24,7 +24,7 @@ static std::string trim(const std::string &s) {
     return s.substr(start, end - start);
 }
 
-// Helper: split into tokens ignoring any whitespace
+// tokenize output
 static std::vector<std::string> tokenize(const std::string &s) {
     std::vector<std::string> toks;
     std::istringstream iss(s);
@@ -35,13 +35,13 @@ static std::vector<std::string> tokenize(const std::string &s) {
     return toks;
 }
 
-// Compare two strings whitespace‑insensitively
+// compare output
 static bool compare_output(const std::string &got, const std::string &expected) {
     return tokenize(got) == tokenize(expected);
 }
 
 int main() {
-    // 1. Compile submission.cpp
+    // compile solution
     const std::string compile_cmd = "g++ -std=c++17 -O2 -pipe -static -s submission.cpp -o solution";
     int compile_status = std::system(compile_cmd.c_str());
 #ifdef _WIN32
@@ -53,7 +53,7 @@ int main() {
         return 0;
     }
 
-    // 2. Discover test cases (input*.txt)
+    // find test cases
     std::vector<fs::path> inputs;
     for (const auto &entry : fs::directory_iterator(".")) {
         if (!entry.is_regular_file()) continue;
@@ -77,7 +77,7 @@ int main() {
     }
 
     for (const auto &in_path : inputs) {
-        // Derive expected output path
+        // get expected output path
         std::string out_name = in_path.filename().string();
         // replace leading "input" with "output"
         if (out_name.rfind("input", 0) == 0) {
@@ -93,7 +93,7 @@ int main() {
             return 0;
         }
 
-        // Build command: timeout <limit>s ./solution < input > __tmp_out.txt
+        // run solution
         std::string cmd = "timeout " + std::to_string(time_limit_sec) + "s ./solution < " + in_path.string() + " > __tmp_out.txt";
         int run_status = std::system(cmd.c_str());
         // Check timeout (124 is timeout's exit code)
@@ -111,7 +111,7 @@ int main() {
             return 0;
         }
 
-        // Read both outputs
+        // compare results
         std::ifstream got_file("__tmp_out.txt");
         std::ifstream exp_file(expected_path);
         std::stringstream got_buf, exp_buf;

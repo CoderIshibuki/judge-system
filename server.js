@@ -23,7 +23,6 @@ app.get("/", (_, res) => {
 app.post("/submit", async (req, res) => {
   console.log("Received Body:", req.body);
   const { sourceCode } = req.body;
-  // Ensure problemId is captured and converted to a Number if provided
   let problemIdRaw = req.body && req.body.problemId;
   let problemId = undefined;
   if (typeof problemIdRaw !== "undefined" && problemIdRaw !== null) {
@@ -46,14 +45,14 @@ app.post("/submit", async (req, res) => {
       submissionId: submission.id,
       message: "Submission created",
     });
-    // Save source file for background judging (use absolute path)
+
     const filePath = path_1.default.join(
       __dirname,
       "submission_" + submission.id + ".cpp",
     );
     fs_1.default.writeFileSync(filePath, sourceCode);
     console.log("Saved submission file at", filePath);
-    // Kick off background judge (do not await)
+
     judgeSubmission(submission.id).catch((err) =>
       console.error("judgeSubmission error:", err),
     );
@@ -75,7 +74,7 @@ async function judgeSubmission(submissionId) {
   } catch (err) {
     console.error("Failed to set status Compiling:", err);
   }
-  // Compile using g++
+
   const compileCmd = `g++ "${filePath}" -o "${exePath}"`;
   const compileSuccess = await new Promise((resolve) => {
     (0, child_process_1.exec)(
@@ -99,10 +98,6 @@ async function judgeSubmission(submissionId) {
     );
   });
   if (!compileSuccess) {
-    // keep submission file for debugging; do not delete
-    // try {
-    //   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    // } catch (e) {}
     return;
   }
   try {
@@ -183,13 +178,7 @@ async function judgeSubmission(submissionId) {
         } catch (e) {
           console.error("Error handling run result:", e);
         } finally {
-          // keep files for debugging; do not delete
-          // try {
-          //   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-          // } catch (e) {}
-          // try {
-          //   if (fs.existsSync(exePath)) fs.unlinkSync(exePath);
-          // } catch (e) {}
+
           resolve();
         }
       },
@@ -220,7 +209,7 @@ app.get("/submission/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch submission" });
   }
 });
-// Maximum allowed source code size (64 KiB)
+
 const MAX_CODE_BYTES = 64 * 1024;
 app.post("/api/submit", async (req, res) => {
   const safeSend = (statusCode, data) => {
@@ -229,7 +218,7 @@ app.post("/api/submit", async (req, res) => {
     }
   };
   const { code, userId = 1, problemId = 1 } = req.body;
-  // ---- basic validation ----
+
   if (typeof code !== "string" || !code.trim()) {
     return res.status(400).json({ error: "Vui lòng gửi code!" });
   }
@@ -239,14 +228,14 @@ app.post("/api/submit", async (req, res) => {
   if (!Number.isInteger(userId) || !Number.isInteger(problemId)) {
     return res.status(400).json({ error: "userId / problemId không hợp lệ" });
   }
-  // ---- write to a unique temp folder ----
+
   const tmpDir = fs_1.default.mkdtempSync(
     path_1.default.join(os_1.default.tmpdir(), "judge-"),
   );
   const srcPath = path_1.default.join(tmpDir, "submission.cpp");
   fs_1.default.writeFileSync(srcPath, code);
   console.log("📝 Đang chấm bài...");
-  // Create DB record early so we can update status mid-judging
+
   let submissionRecord = null;
   try {
     submissionRecord = await prisma.submission.create({
@@ -263,7 +252,7 @@ app.post("/api/submit", async (req, res) => {
     }
     return safeSend(500, { error: "Lỗi lưu vào database" });
   }
-  // ---- compile submission.cpp with g++ ----
+
   const exePath = path_1.default.join(tmpDir, "submission.exe");
   const compile = (0, child_process_1.spawn)("g++", [srcPath, "-o", exePath], {
     cwd: tmpDir,
@@ -312,7 +301,7 @@ app.post("/api/submit", async (req, res) => {
   } catch (e) {
     console.error("Failed to set Running status:", e);
   }
-  // Locate testcases directory for the problem
+
   const testcasesDir = path_1.default.join(
     __dirname,
     "problems",
@@ -326,7 +315,7 @@ app.post("/api/submit", async (req, res) => {
       .filter((f) => f.endsWith(".in"))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }
-  // Fallback to single input/expected in repo root if no testcases found
+
   if (inFiles.length === 0) {
     const inputPath = path_1.default.join(__dirname, "input.txt");
     const expectedPath = path_1.default.join(__dirname, "expected.txt");
@@ -363,7 +352,7 @@ app.post("/api/submit", async (req, res) => {
       } catch (e) {}
     }
   };
-  // Loop through testcases
+
   for (const inFile of inFiles) {
     let inPath;
     let outPath;

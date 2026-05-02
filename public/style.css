@@ -1,4 +1,4 @@
-/* Custom Scrollbar cho toàn bộ trang web chuẩn Dark Mode */
+/* custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -17,7 +17,7 @@
   background: #4b5563; /* bg-gray-600 */
 }
 
-/* Ẩn thanh cuộn nhưng vẫn cho phép cuộn (dành cho Sidebar nếu muốn gọn) */
+/* hide scrollbar */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -26,7 +26,7 @@
   scrollbar-width: none; /* Firefox */
 }
 
-/* Hiệu ứng nhấp nháy cho text Loading */
+/* pulse animation */
 .animate-pulse-fast {
   animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
