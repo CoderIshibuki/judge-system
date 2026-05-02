@@ -39,7 +39,7 @@ A powerful, sleek, and real-time Online Judge platform built with Node.js, Socke
 
 ### 1. Clone the repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/CoderIshibuki/judge-system
 cd online-judge
 ```
 
